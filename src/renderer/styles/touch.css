@@ -1,0 +1,50 @@
+/* ── Touch-first global resets ── */
+*, *::before, *::after {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-size: 18px;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+/* All interactive elements get a minimum tap area */
+button, [role="button"], .btn, .list-group-item-action {
+  min-height: 56px;
+  cursor: pointer;
+}
+
+/* Boost Bootstrap button text size */
+.btn { font-size: 1rem; }
+.btn-lg { font-size: 1.25rem; min-height: 64px; }
+.btn-sm { min-height: 40px; font-size: 0.85rem; }
+
+/* Bigger tab buttons */
+.nav-tabs .nav-link {
+  min-height: 52px;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scrollable regions on touch */
+.touch-scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Remove input tap delay */
+input, select, textarea { touch-action: manipulation; }
+
+/* Prevent double-tap zoom on buttons */
+button { touch-action: manipulation; }

@@ -1,0 +1,18 @@
+export const IPC = {
+  PRINTER_PRINT: 'printer:print',
+  PRINTER_PREVIEW: 'printer:preview',
+  PRINTER_HISTORY: 'printer:history',
+  SENSOR_UPDATE: 'sensor:update',
+  SENSOR_LIST: 'sensor:list',
+  WIFI_SAVE: 'wifi:save',
+  WIFI_GET: 'wifi:get',
+  WIFI_SCAN: 'wifi:scan',
+  CONFIG_GET: 'config:get',
+  LOGS_TAIL: 'logs:tail',
+  REPORT_PRINTS: 'report:prints',
+  REPORT_TEMPS: 'report:temps',
+  DEBUG_INFO: 'debug:info',
+  DEBUG_SEND_ZPL: 'debug:send-zpl',
+} as const
+
+export type IpcChannel = typeof IPC[keyof typeof IPC]

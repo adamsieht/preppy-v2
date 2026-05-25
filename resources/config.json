@@ -1,0 +1,25 @@
+{
+  "temperature": {
+    "dangerLow": 31,
+    "dangerHigh": 41,
+    "warningLow": 37,
+    "units": "F"
+  },
+  "printer": {
+    "device": "/dev/usb/lp0",
+    "zplTemplateDir": "resources/zpl",
+    "simulate": false
+  },
+  "sensor": {
+    "pollIntervalMs": 10000,
+    "logDir": "/templogs"
+  },
+  "wifi": {
+    "interface": "wlan0",
+    "supplicantPath": "/etc/wpa_supplicant/wpa_supplicant.conf"
+  },
+  "logging": {
+    "retentionDays": 30,
+    "maxFileSizeMb": 10
+  }
+}

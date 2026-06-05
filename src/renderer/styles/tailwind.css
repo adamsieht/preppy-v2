@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Slim dark horizontal scrollbar for the Preppy cards row */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: #40464e transparent;
+}
+.scrollbar-dark::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #40464e;
+  border-radius: 3px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: #6e7681;
+}

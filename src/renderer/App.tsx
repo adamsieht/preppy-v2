@@ -1,7 +1,6 @@
 import React, { Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
-import DebugButton from './components/DebugButton'
 
 const Home = React.lazy(() => import('./pages/Home'))
 const Preppy = React.lazy(() => import('./pages/Preppy'))
@@ -26,7 +25,6 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/debug" element={<Debug />} />
         </Routes>
-        <DebugButton />
       </Suspense>
     </ErrorBoundary>
   )

@@ -17,9 +17,52 @@ const PREP_ITEMS: PrepItem[] = [
 
 const PRIORITIES: { id: 1 | 2 | 3; label: string }[] = [
   { id: 1, label: '12 PM' },
-  { id: 2, label: '2 PM' },
-  { id: 3, label: '4 PM' },
+  { id: 2, label: '2 PM'  },
+  { id: 3, label: '4 PM'  },
 ]
+
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  cartBtn: (hasItems: boolean) =>
+    [
+      'border border-[#ced4da] rounded-xl px-4 py-2 font-bold text-base min-h-[44px]',
+      hasItems ? 'bg-[#0d6efd] text-white' : 'bg-[#f8f9fa] text-[#6c757d]',
+    ].join(' '),
+  cartBadge:     'ml-1 bg-white text-[#0d6efd] rounded-full px-[7px] text-[0.85rem] font-extrabold',
+  tabsContainer: 'flex border-b-2 border-[#dee2e6]',
+  tabBtn: (active: boolean) =>
+    [
+      'flex-1 min-h-[56px] border-solid border-0 border-b-[3px] text-[1.1rem] cursor-pointer',
+      active
+        ? 'border-[#ffc107] bg-[#fff9e6] font-bold text-[#664d03]'
+        : 'border-transparent bg-[#f8f9fa] font-normal text-[#495057]',
+    ].join(' '),
+  itemList: 'flex flex-col gap-[6px] p-[10px]',
+  itemBtn: (inCart: boolean) =>
+    [
+      'min-h-[68px] rounded-xl flex items-center justify-between px-5 text-[1.2rem] cursor-pointer',
+      inCart
+        ? 'border-[3px] border-[#0d6efd] bg-[#e7f1ff] font-bold text-[#0d6efd]'
+        : 'border-2 border-[#dee2e6] bg-white font-normal text-[#212529]',
+    ].join(' '),
+  itemQtyBadge:  'bg-[#0d6efd] text-white rounded-full w-8 h-8 flex items-center justify-center text-[0.9rem] font-extrabold',
+  modalOverlay:  'fixed inset-0 z-[100] flex flex-col justify-end',
+  modalBackdrop: 'absolute inset-0 bg-black/40',
+  modalSheet:    'relative bg-white rounded-t-2xl p-4 max-h-[70%] overflow-y-auto shadow-[0_-4px_24px_rgba(0,0,0,0.15)]',
+  modalHeader:   'flex justify-between items-center mb-3',
+  modalTitle:    'text-[1.2rem] font-bold',
+  modalCloseBtn: 'bg-transparent border-0 text-[1.4rem] min-h-[40px] px-2 text-[#6c757d]',
+  modalEmpty:    'text-[#6c757d] text-center p-4',
+  cartItem:      'flex items-center gap-3 py-[10px] border-b border-[#dee2e6]',
+  cartItemName:  'flex-1 text-[1.1rem]',
+  cartQtyBtn:    'w-11 h-11 border border-[#ced4da] rounded-lg bg-[#f8f9fa] text-[1.2rem]',
+  cartQtyDisplay:'min-w-[28px] text-center font-bold text-[1.1rem]',
+  cartDeleteBtn: 'w-11 h-11 border border-[#f8d7da] rounded-lg bg-[#f8d7da] text-[1.1rem] text-[#842029]',
+  cartActions:   'flex gap-2 mt-4',
+  cartPrintBtn:  'flex-1 min-h-[60px] bg-[#0d6efd] text-white border-0 rounded-xl text-[1.1rem] font-bold',
+  cartClearBtn:  'min-h-[60px] bg-[#f8d7da] text-[#842029] border-0 rounded-xl text-base px-4',
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 export default function Tally() {
   const [priority, setPriority] = useState<1 | 2 | 3>(1)
@@ -41,80 +84,31 @@ export default function Tally() {
   }
 
   const cartRight = (
-    <button
-      onClick={() => setCartOpen(true)}
-      style={{
-        position: 'relative',
-        background: totalItems > 0 ? '#0d6efd' : '#f8f9fa',
-        color: totalItems > 0 ? '#fff' : '#6c757d',
-        border: '1px solid #ced4da',
-        borderRadius: 10,
-        padding: '8px 16px',
-        fontWeight: 700,
-        fontSize: '1rem',
-        minHeight: 44,
-      }}
-    >
-      Cart {totalItems > 0 && <span style={{ marginLeft: 4, background: '#fff', color: '#0d6efd', borderRadius: 99, padding: '0 7px', fontSize: '0.85rem', fontWeight: 800 }}>{totalItems}</span>}
+    <button onClick={() => setCartOpen(true)} className={classes.cartBtn(totalItems > 0)}>
+      Cart {totalItems > 0 && <span className={classes.cartBadge}>{totalItems}</span>}
     </button>
   )
 
   return (
     <PageLayout title="Prep List" back right={cartRight} noPad>
       {/* Priority tabs */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #dee2e6' }}>
+      <div className={classes.tabsContainer}>
         {PRIORITIES.map(p => (
-          <button
-            key={p.id}
-            onClick={() => setPriority(p.id)}
-            style={{
-              flex: 1, minHeight: 56, border: 'none',
-              borderBottom: priority === p.id ? '3px solid #ffc107' : '3px solid transparent',
-              background: priority === p.id ? '#fff9e6' : '#f8f9fa',
-              fontWeight: priority === p.id ? 700 : 400,
-              fontSize: '1.1rem',
-              color: priority === p.id ? '#664d03' : '#495057',
-            }}
-          >
+          <button key={p.id} onClick={() => setPriority(p.id)} className={classes.tabBtn(priority === p.id)}>
             {p.label}
           </button>
         ))}
       </div>
 
       {/* Item list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10 }}>
+      <div className={classes.itemList}>
         {PREP_ITEMS.filter(i => i.priority === priority).map(item => {
-          const inCart = cart.find(c => c.id === item.id)
+          const inCart = !!cart.find(c => c.id === item.id)
+          const cartItem = cart.find(c => c.id === item.id)
           return (
-            <button
-              key={item.id}
-              onClick={() => toggle(item)}
-              style={{
-                minHeight: 68,
-                border: inCart ? '3px solid #0d6efd' : '2px solid #dee2e6',
-                borderRadius: 10,
-                background: inCart ? '#e7f1ff' : '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0 20px',
-                fontSize: '1.2rem',
-                fontWeight: inCart ? 700 : 400,
-                color: inCart ? '#0d6efd' : '#212529',
-                cursor: 'pointer',
-              }}
-            >
+            <button key={item.id} onClick={() => toggle(item)} className={classes.itemBtn(inCart)}>
               <span>{item.name}</span>
-              {inCart && (
-                <span style={{
-                  background: '#0d6efd', color: '#fff',
-                  borderRadius: 99, width: 32, height: 32,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.9rem', fontWeight: 800,
-                }}>
-                  {inCart.qty}
-                </span>
-              )}
+              {inCart && <span className={classes.itemQtyBadge}>{cartItem!.qty}</span>}
             </button>
           )
         })}
@@ -122,49 +116,30 @@ export default function Tally() {
 
       {/* Cart bottom sheet */}
       {cartOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 100,
-          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} onClick={() => setCartOpen(false)} />
-          <div style={{
-            position: 'relative', background: '#fff', borderRadius: '16px 16px 0 0',
-            padding: 16, maxHeight: '70%', overflow: 'hidden auto',
-            boxShadow: '0 -4px 24px rgba(0,0,0,0.15)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <span style={{ fontSize: '1.2rem', fontWeight: 700 }}>Cart</span>
-              <button onClick={() => setCartOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', minHeight: 40, padding: '0 8px', color: '#6c757d' }}>✕</button>
+        <div className={classes.modalOverlay}>
+          <div className={classes.modalBackdrop} onClick={() => setCartOpen(false)} />
+          <div className={classes.modalSheet}>
+            <div className={classes.modalHeader}>
+              <span className={classes.modalTitle}>Cart</span>
+              <button onClick={() => setCartOpen(false)} className={classes.modalCloseBtn}>✕</button>
             </div>
 
-            {cart.length === 0 && <p style={{ color: '#6c757d', textAlign: 'center', padding: 16 }}>Nothing added yet.</p>}
+            {cart.length === 0 && <p className={classes.modalEmpty}>Nothing added yet.</p>}
 
             {cart.map(item => (
-              <div key={item.id} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 0', borderBottom: '1px solid #dee2e6',
-              }}>
-                <span style={{ flex: 1, fontSize: '1.1rem' }}>{item.name}</span>
-                <button onClick={() => changeQty(item.id, -1)} style={{ width: 44, height: 44, border: '1px solid #ced4da', borderRadius: 8, background: '#f8f9fa', fontSize: '1.2rem' }}>−</button>
-                <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700, fontSize: '1.1rem' }}>{item.qty}</span>
-                <button onClick={() => changeQty(item.id, 1)} style={{ width: 44, height: 44, border: '1px solid #ced4da', borderRadius: 8, background: '#f8f9fa', fontSize: '1.2rem' }}>+</button>
-                <button onClick={() => toggle(item)} style={{ width: 44, height: 44, border: '1px solid #f8d7da', borderRadius: 8, background: '#f8d7da', fontSize: '1.1rem', color: '#842029' }}>✕</button>
+              <div key={item.id} className={classes.cartItem}>
+                <span className={classes.cartItemName}>{item.name}</span>
+                <button onClick={() => changeQty(item.id, -1)} className={classes.cartQtyBtn}>−</button>
+                <span className={classes.cartQtyDisplay}>{item.qty}</span>
+                <button onClick={() => changeQty(item.id, 1)} className={classes.cartQtyBtn}>+</button>
+                <button onClick={() => toggle(item)} className={classes.cartDeleteBtn}>✕</button>
               </div>
             ))}
 
             {cart.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <button
-                  style={{ flex: 1, minHeight: 60, background: '#0d6efd', color: '#fff', border: 'none', borderRadius: 10, fontSize: '1.1rem', fontWeight: 700 }}
-                >
-                  Print List
-                </button>
-                <button
-                  onClick={() => { setCart([]); setCartOpen(false) }}
-                  style={{ minHeight: 60, background: '#f8d7da', color: '#842029', border: 'none', borderRadius: 10, fontSize: '1rem', padding: '0 16px' }}
-                >
-                  Clear
-                </button>
+              <div className={classes.cartActions}>
+                <button className={classes.cartPrintBtn}>Print List</button>
+                <button onClick={() => { setCart([]); setCartOpen(false) }} className={classes.cartClearBtn}>Clear</button>
               </div>
             )}
           </div>

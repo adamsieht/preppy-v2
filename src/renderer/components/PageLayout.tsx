@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import Clock from './Clock'
 
 interface Props {
   title: string
@@ -9,55 +10,50 @@ interface Props {
   noPad?: boolean               // opt out of content padding
 }
 
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  wrapper:  'flex flex-col h-full overflow-hidden',
+  header:   'flex items-center min-h-[64px] px-4 border-b border-[#dee2e6] bg-white shrink-0 gap-3',
+  backBtn:  'bg-transparent border border-[#ced4da] rounded-lg px-4 py-2 text-[1.1rem] min-h-[48px] text-[#495057]',
+  title:    'text-[1.3rem] font-bold grow',
+  cogBtn:   'bg-transparent border-0 text-[#6c757d] text-[1.4rem] leading-none cursor-pointer px-1 rounded shrink-0 hover:text-[#212529]',
+  content:  (noPad?: boolean) => `flex-1 min-h-0 overflow-x-hidden overflow-y-auto${noPad ? '' : ' p-4'}`,
+  footer:   'border-t border-[#dee2e6] bg-white shrink-0',
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function PageLayout({ title, back, right, children, footer, noPad }: Props) {
   const navigate = useNavigate()
+  const location = useLocation()
   const backPath = back === true ? '/' : (back ?? null)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div className={classes.wrapper}>
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        minHeight: 64,
-        padding: '0 16px',
-        borderBottom: '1px solid #dee2e6',
-        background: '#fff',
-        flexShrink: 0,
-        gap: 12,
-      }}>
+      <div className={classes.header}>
         {backPath && (
-          <button
-            onClick={() => navigate(backPath)}
-            style={{
-              background: 'none',
-              border: '1px solid #ced4da',
-              borderRadius: 8,
-              padding: '8px 16px',
-              fontSize: '1.1rem',
-              minHeight: 48,
-              color: '#495057',
-            }}
-          >
+          <button onClick={() => navigate(backPath)} className={classes.backBtn}>
             ←
           </button>
         )}
-        <span style={{ fontSize: '1.3rem', fontWeight: 700, flexGrow: 1 }}>{title}</span>
+        <span className={classes.title}>{title}</span>
+        {location.pathname !== '/debug' && (
+          <button onClick={() => navigate('/debug')} className={classes.cogBtn} title="Debug">
+            ⚙
+          </button>
+        )}
+        <Clock />
         {right}
       </div>
 
       {/* Scrollable content */}
-      <div style={{ flex: 1, overflow: 'hidden auto', WebkitOverflowScrolling: 'touch' as never, padding: noPad ? 0 : 16 }}>
+      <div className={classes.content(noPad)}>
         {children}
       </div>
 
       {/* Sticky footer */}
       {footer && (
-        <div style={{
-          borderTop: '1px solid #dee2e6',
-          background: '#fff',
-          flexShrink: 0,
-        }}>
+        <div className={classes.footer}>
           {footer}
         </div>
       )}

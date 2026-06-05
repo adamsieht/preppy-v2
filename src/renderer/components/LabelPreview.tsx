@@ -19,50 +19,46 @@ interface Props {
   durationHrs: number
 }
 
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  wrapper:      'bg-white border-2 border-[#222] rounded-md px-5 py-4 font-mono shadow-[0_2px_12px_rgba(0,0,0,0.15)] select-none',
+  headerRow:    'flex justify-between items-baseline mb-1',
+  templateName: 'text-base font-bold tracking-[2px] text-[#222]',
+  templateDesc: 'text-[0.75rem] text-[#666]',
+  madeOn:       'text-[0.75rem] text-[#888] mb-2',
+  dividerBold:  'border-t-2 border-[#222] my-[6px]',
+  dividerLight: 'border-t border-[#aaa] my-[6px]',
+  useByLabel:   'text-[0.7rem] font-bold uppercase tracking-[3px] text-[#444] mb-1',
+  expiryDate:   'text-[3.2rem] font-black leading-none text-[#111] mb-[2px]',
+  expiryTime:   'text-[2rem] font-bold text-[#333] mb-[10px]',
+  footer:       'text-[0.72rem] text-[#666]',
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function LabelPreview({ template, durationHrs }: Props) {
   const now = dayjs()
   const expiry = now.add(durationHrs, 'hour')
 
   return (
-    <div style={{
-      background: '#fff',
-      border: '2px solid #222',
-      borderRadius: 6,
-      padding: '16px 20px',
-      fontFamily: 'monospace',
-      boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-      userSelect: 'none',
-    }}>
-      {/* Header row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-        <span style={{ fontSize: '1rem', fontWeight: 700, letterSpacing: 2, color: '#222' }}>
-          {template}
-        </span>
-        <span style={{ fontSize: '0.75rem', color: '#666' }}>
-          {TEMPLATE_LABELS[template]}
-        </span>
+    <div className={classes.wrapper}>
+      <div className={classes.headerRow}>
+        <span className={classes.templateName}>{template}</span>
+        <span className={classes.templateDesc}>{TEMPLATE_LABELS[template]}</span>
       </div>
 
-      <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 8 }}>
+      <div className={classes.madeOn}>
         Made: {now.format('MM/DD/YYYY')} at {now.format('HH:mm')}
       </div>
 
-      <hr style={{ margin: '6px 0 10px', borderColor: '#222', borderWidth: 2 }} />
+      <div className={classes.dividerBold} />
 
-      {/* Big expiry block */}
-      <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 3, color: '#444', marginBottom: 4 }}>
-        {USE_BY_LABEL[template]}
-      </div>
-      <div style={{ fontSize: '3.2rem', fontWeight: 900, lineHeight: 1, color: '#111', marginBottom: 2 }}>
-        {expiry.format('MM/DD/YYYY')}
-      </div>
-      <div style={{ fontSize: '2rem', fontWeight: 700, color: '#333', marginBottom: 10 }}>
-        {expiry.format('HH:mm')}
-      </div>
+      <div className={classes.useByLabel}>{USE_BY_LABEL[template]}</div>
+      <div className={classes.expiryDate}>{expiry.format('MM/DD/YYYY')}</div>
+      <div className={classes.expiryTime}>{expiry.format('HH:mm')}</div>
 
-      <hr style={{ margin: '6px 0 8px', borderColor: '#aaa' }} />
+      <div className={classes.dividerLight} />
 
-      <div style={{ fontSize: '0.72rem', color: '#666' }}>
+      <div className={classes.footer}>
         {durationHrs < 24
           ? `${durationHrs}h from ${template === 'OX' ? 'opening' : 'prep'}`
           : `${durationHrs / 24} day${durationHrs / 24 !== 1 ? 's' : ''} from ${template === 'OX' ? 'opening' : 'prep'}`}

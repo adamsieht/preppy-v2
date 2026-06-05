@@ -1,19 +1,60 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Keyboard from 'react-simple-keyboard'
 import 'react-simple-keyboard/build/css/index.css'
 import PageLayout from '../../components/PageLayout'
 import AutoDismissAlert from '../../components/AutoDismissAlert'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
-import { useCallback } from 'react'
 
 interface WifiNetwork { ssid: string; signal: number; security: string }
+
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  alertWrapper:    'px-3 pt-3',
+  fieldsWrapper:   'px-3 pt-3 flex flex-col gap-2',
+  fieldBtn: (active: boolean) =>
+    [
+      'min-h-[64px] rounded-xl flex items-center px-4 gap-3 text-left cursor-pointer',
+      active ? 'border-2 border-[#0d6efd] bg-[#e7f1ff]' : 'border border-[#ced4da] bg-[#f8f9fa]',
+    ].join(' '),
+  fieldLabel:      'min-w-[80px] text-[#6c757d] text-[0.9rem]',
+  fieldValue: (hasValue: boolean) =>
+    `flex-1 text-[1.1rem] ${hasValue ? 'font-semibold text-[#212529]' : 'font-normal text-[#adb5bd]'}`,
+  fieldEditing:    'text-[0.8rem] text-[#0d6efd]',
+  keyboardWrapper: 'px-1 py-2',
+  networkSection:  'px-3 pt-3',
+  networkHeader:   'flex justify-between items-center mb-2',
+  networkLabel:    'font-semibold',
+  scanBtn:         'min-h-[40px] px-[14px] border border-[#ced4da] rounded-lg bg-[#f8f9fa] text-[0.9rem] disabled:opacity-60',
+  networkList:     'flex flex-col gap-[6px]',
+  noNetworks:      'text-[#6c757d] text-[0.9rem]',
+  networkBtn: (selected: boolean) =>
+    [
+      'min-h-[64px] rounded-xl flex items-center px-4 gap-[14px] cursor-pointer',
+      selected ? 'border-2 border-[#0d6efd] bg-[#e7f1ff]' : 'border border-[#dee2e6] bg-white',
+    ].join(' '),
+  networkInfo:     'flex-1 text-left',
+  networkSsid:     'font-semibold text-[1.05rem]',
+  networkSec:      'text-[0.8rem] text-[#6c757d]',
+  networkSignal:   'text-[0.85rem] text-[#adb5bd]',
+  footer:          'flex gap-2 p-3',
+  saveBtn: (canSave: boolean) =>
+    [
+      'flex-1 min-h-[64px] text-[1.2rem] font-bold text-white border-0 rounded-xl disabled:opacity-60',
+      canSave ? 'bg-[#0d6efd]' : 'bg-[#6c757d]',
+    ].join(' '),
+  // SignalBars
+  signalBars:      'inline-flex items-end gap-[2px] h-5',
+  signalBar: (active: boolean) =>
+    `inline-block w-[5px] rounded-[1px] ${active ? 'bg-[#198754]' : 'bg-[#dee2e6]'}`,
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 function SignalBars({ signal }: { signal: number }) {
   const bars = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 2, height: 20 }}>
+    <span className={classes.signalBars}>
       {[1, 2, 3, 4].map(b => (
-        <span key={b} style={{ display: 'inline-block', width: 5, height: b * 5, borderRadius: 1, background: b <= bars ? '#198754' : '#dee2e6' }} />
+        <span key={b} className={classes.signalBar(b <= bars)} style={{ height: b * 5 }} />
       ))}
     </span>
   )
@@ -82,16 +123,11 @@ export default function WiFi() {
   }
 
   const footer = activeField === null ? (
-    <div style={{ display: 'flex', gap: 8, padding: 12 }}>
+    <div className={classes.footer}>
       <button
         onClick={handleSave}
         disabled={saving || !ssid || !pass}
-        style={{
-          flex: 1, minHeight: 64, fontSize: '1.2rem', fontWeight: 700,
-          background: (!ssid || !pass) ? '#6c757d' : '#0d6efd',
-          color: '#fff', border: 'none', borderRadius: 10,
-          opacity: (saving || !ssid || !pass) ? 0.6 : 1,
-        }}
+        className={classes.saveBtn(!!ssid && !!pass)}
       >
         {saving ? 'Saving…' : 'Save & Apply'}
       </button>
@@ -101,41 +137,30 @@ export default function WiFi() {
   return (
     <PageLayout title="WiFi" back noPad footer={footer}>
       {status && (
-        <div style={{ padding: '12px 12px 0' }}>
+        <div className={classes.alertWrapper}>
           <AutoDismissAlert variant={status.ok ? 'success' : 'danger'} msg={status.msg} onDismiss={clearStatus} />
         </div>
       )}
 
       {/* Credential fields */}
-      <div style={{ padding: '12px 12px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className={classes.fieldsWrapper}>
         {[
-          { id: 'ssid' as const, label: 'Network', value: ssid },
+          { id: 'ssid' as const, label: 'Network',  value: ssid },
           { id: 'pass' as const, label: 'Password', value: pass, password: true },
         ].map(({ id, label, value, password }) => (
-          <button
-            key={id}
-            onClick={() => setActiveField(id)}
-            style={{
-              minHeight: 64, border: activeField === id ? '2px solid #0d6efd' : '1px solid #ced4da',
-              borderRadius: 10, background: activeField === id ? '#e7f1ff' : '#f8f9fa',
-              display: 'flex', alignItems: 'center', padding: '0 16px', gap: 12,
-              textAlign: 'left', cursor: 'pointer',
-            }}
-          >
-            <span style={{ minWidth: 80, color: '#6c757d', fontSize: '0.9rem' }}>{label}</span>
-            <span style={{ flex: 1, fontSize: '1.1rem', fontWeight: value ? 600 : 400, color: value ? '#212529' : '#adb5bd' }}>
+          <button key={id} onClick={() => setActiveField(id)} className={classes.fieldBtn(activeField === id)}>
+            <span className={classes.fieldLabel}>{label}</span>
+            <span className={classes.fieldValue(!!value)}>
               {value ? (password ? '•'.repeat(value.length) : value) : `Tap to enter ${label.toLowerCase()}`}
             </span>
-            {activeField === id && (
-              <span style={{ fontSize: '0.8rem', color: '#0d6efd' }}>editing</span>
-            )}
+            {activeField === id && <span className={classes.fieldEditing}>editing</span>}
           </button>
         ))}
       </div>
 
       {/* Keyboard (only when a field is active) */}
       {activeField && (
-        <div style={{ padding: '8px 4px' }}>
+        <div className={classes.keyboardWrapper}>
           <Keyboard
             onKeyPress={onKeyPress}
             layout={{
@@ -162,37 +187,25 @@ export default function WiFi() {
 
       {/* Network list (hidden while keyboard is open) */}
       {!activeField && (
-        <div style={{ padding: '12px 12px 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontWeight: 600 }}>Available Networks</span>
-            <button
-              onClick={scan}
-              disabled={scanning}
-              style={{ minHeight: 40, padding: '0 14px', border: '1px solid #ced4da', borderRadius: 8, background: '#f8f9fa', fontSize: '0.9rem' }}
-            >
+        <div className={classes.networkSection}>
+          <div className={classes.networkHeader}>
+            <span className={classes.networkLabel}>Available Networks</span>
+            <button onClick={scan} disabled={scanning} className={classes.scanBtn}>
               {scanning ? 'Scanning…' : '⟳ Scan'}
             </button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className={classes.networkList}>
             {networks.length === 0 && !scanning && (
-              <p style={{ color: '#6c757d', fontSize: '0.9rem' }}>No networks found.</p>
+              <p className={classes.noNetworks}>No networks found.</p>
             )}
             {networks.map(n => (
-              <button
-                key={n.ssid}
-                onClick={() => selectNetwork(n)}
-                style={{
-                  minHeight: 64, border: ssid === n.ssid ? '2px solid #0d6efd' : '1px solid #dee2e6',
-                  borderRadius: 10, background: ssid === n.ssid ? '#e7f1ff' : '#fff',
-                  display: 'flex', alignItems: 'center', padding: '0 16px', gap: 14, cursor: 'pointer',
-                }}
-              >
+              <button key={n.ssid} onClick={() => selectNetwork(n)} className={classes.networkBtn(ssid === n.ssid)}>
                 <SignalBars signal={n.signal} />
-                <div style={{ flex: 1, textAlign: 'left' }}>
-                  <div style={{ fontWeight: 600, fontSize: '1.05rem' }}>{n.ssid}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#6c757d' }}>{n.security || 'Open'}</div>
+                <div className={classes.networkInfo}>
+                  <div className={classes.networkSsid}>{n.ssid}</div>
+                  <div className={classes.networkSec}>{n.security || 'Open'}</div>
                 </div>
-                <span style={{ fontSize: '0.85rem', color: '#adb5bd' }}>{n.signal}%</span>
+                <span className={classes.networkSignal}>{n.signal}%</span>
                 {n.security && <span>🔒</span>}
               </button>
             ))}

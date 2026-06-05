@@ -1,5 +1,4 @@
 import React from 'react'
-import { Alert, Button, Container } from 'react-bootstrap'
 
 interface Props {
   children: React.ReactNode
@@ -8,6 +7,16 @@ interface Props {
 interface State {
   error: Error | null
 }
+
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  screen:  'flex flex-col items-center justify-center h-screen',
+  alert:   'w-full max-w-[600px] bg-[#f8d7da] border border-[#f5c2c7] text-[#842029] rounded p-4',
+  heading: 'font-bold text-lg mb-2',
+  pre:     'text-sm mb-3 whitespace-pre-wrap',
+  btn:     'border border-[#842029] text-[#842029] bg-transparent rounded px-3 py-2 text-sm',
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 export default class ErrorBoundary extends React.Component<Props, State> {
   state: State = { error: null }
@@ -19,15 +28,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <Container className="d-flex flex-column align-items-center justify-content-center vh-100">
-          <Alert variant="danger" className="w-100" style={{ maxWidth: 600 }}>
-            <Alert.Heading>Something went wrong</Alert.Heading>
-            <pre className="small mb-3">{this.state.error.message}</pre>
-            <Button variant="outline-danger" onClick={() => window.location.reload()}>
+        <div className={classes.screen}>
+          <div className={classes.alert}>
+            <h5 className={classes.heading}>Something went wrong</h5>
+            <pre className={classes.pre}>{this.state.error.message}</pre>
+            <button onClick={() => window.location.reload()} className={classes.btn}>
               Reload
-            </Button>
-          </Alert>
-        </Container>
+            </button>
+          </div>
+        </div>
       )
     }
     return this.props.children

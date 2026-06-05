@@ -14,6 +14,39 @@ const TEMPLATES: { id: LabelTemplate; label: string }[] = [
 
 const DIGITS = ['1','2','3','4','5','6','7','8','9','0','00']
 
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  alertWrapper:  'px-3 pt-3',
+  tabsContainer: 'flex border-b-2 border-[#dee2e6]',
+  tabBtn: (active: boolean) =>
+    [
+      'flex-1 min-h-[56px] border-solid border-0 border-b-[3px] text-[1.1rem] cursor-pointer',
+      active
+        ? 'border-[#0d6efd] bg-[#e7f1ff] font-bold text-[#0d6efd]'
+        : 'border-transparent bg-[#f8f9fa] font-normal text-[#495057]',
+    ].join(' '),
+  body:          'p-3 flex flex-col gap-3',
+  hoursDisplay:  'text-[3rem] font-black text-center border-2 border-[#dee2e6] rounded-xl py-2 bg-[#f8f9fa] tracking-[2px]',
+  numpadGrid:    'grid grid-cols-3 gap-2',
+  digitBtn:      'min-h-[68px] text-[1.5rem] font-bold border border-[#ced4da] rounded-xl bg-white',
+  deleteBtn:     'min-h-[68px] text-[1.5rem] border border-[#ced4da] rounded-xl bg-[#fff3f3] text-[#dc3545]',
+  footer:        'flex gap-2 p-3 items-center',
+  qtyRow:        'flex gap-[6px] items-center',
+  qtyBtn:        'w-[52px] h-[52px] text-[1.4rem] border border-[#ced4da] rounded-lg bg-[#f8f9fa]',
+  qtyDisplay:    'min-w-[32px] text-center text-[1.2rem] font-bold',
+  printBtn: (hasHrs: boolean) =>
+    [
+      'flex-1 min-h-[64px] text-[1.3rem] font-extrabold text-white border-0 rounded-xl disabled:opacity-60',
+      hasHrs ? 'bg-[#198754]' : 'bg-[#6c757d]',
+    ].join(' '),
+  previewBtn: (active: boolean) =>
+    [
+      'border border-[#ffc107] rounded-lg px-[14px] py-[6px] text-[0.85rem] min-h-[40px]',
+      active ? 'bg-[#ffc107] text-black' : 'bg-transparent text-[#856404]',
+    ].join(' '),
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function PrintX() {
   const [template, setTemplate] = useState<LabelTemplate>('IX')
   const [hrs, setHrs] = useState(4)
@@ -48,44 +81,22 @@ export default function PrintX() {
   }
 
   const rightBtn = (
-    <button
-      onClick={() => setShowPreview(v => !v)}
-      style={{
-        background: showPreview ? '#ffc107' : 'none',
-        border: '1px solid #ffc107',
-        borderRadius: 8,
-        padding: '6px 14px',
-        fontSize: '0.85rem',
-        color: showPreview ? '#000' : '#856404',
-        minHeight: 40,
-      }}
-    >
+    <button onClick={() => setShowPreview(v => !v)} className={classes.previewBtn(showPreview)}>
       {showPreview ? 'Hide ZPL' : 'Preview ZPL'}
     </button>
   )
 
   const footer = (
-    <div style={{ display: 'flex', gap: 8, padding: 12, alignItems: 'center' }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <button
-          onClick={() => setQty(q => Math.max(1, q - 1))}
-          style={{ width: 52, height: 52, fontSize: '1.4rem', border: '1px solid #ced4da', borderRadius: 8, background: '#f8f9fa' }}
-        >−</button>
-        <span style={{ minWidth: 32, textAlign: 'center', fontSize: '1.2rem', fontWeight: 700 }}>{qty}</span>
-        <button
-          onClick={() => setQty(q => Math.min(50, q + 1))}
-          style={{ width: 52, height: 52, fontSize: '1.4rem', border: '1px solid #ced4da', borderRadius: 8, background: '#f8f9fa' }}
-        >+</button>
+    <div className={classes.footer}>
+      <div className={classes.qtyRow}>
+        <button onClick={() => setQty(q => Math.max(1, q - 1))} className={classes.qtyBtn}>−</button>
+        <span className={classes.qtyDisplay}>{qty}</span>
+        <button onClick={() => setQty(q => Math.min(50, q + 1))} className={classes.qtyBtn}>+</button>
       </div>
       <button
         onClick={handlePrint}
         disabled={printing || hrs === 0}
-        style={{
-          flex: 1, minHeight: 64, fontSize: '1.3rem', fontWeight: 800,
-          background: hrs === 0 ? '#6c757d' : '#198754',
-          color: '#fff', border: 'none', borderRadius: 10,
-          opacity: (printing || hrs === 0) ? 0.6 : 1,
-        }}
+        className={classes.printBtn(hrs > 0)}
       >
         {printing ? 'Printing…' : `Print ×${qty}`}
       </button>
@@ -95,64 +106,30 @@ export default function PrintX() {
   return (
     <PageLayout title="Custom Label" back noPad footer={footer} right={rightBtn}>
       {status && (
-        <div style={{ padding: '12px 12px 0' }}>
+        <div className={classes.alertWrapper}>
           <AutoDismissAlert variant={status.ok ? 'success' : 'danger'} msg={status.msg} onDismiss={clearStatus} />
         </div>
       )}
 
       {/* Template tabs */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #dee2e6' }}>
+      <div className={classes.tabsContainer}>
         {TEMPLATES.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setTemplate(id)}
-            style={{
-              flex: 1, minHeight: 56, border: 'none',
-              borderBottom: template === id ? '3px solid #0d6efd' : '3px solid transparent',
-              background: template === id ? '#e7f1ff' : '#f8f9fa',
-              fontWeight: template === id ? 700 : 400,
-              fontSize: '1.1rem',
-              color: template === id ? '#0d6efd' : '#495057',
-            }}
-          >
+          <button key={id} onClick={() => setTemplate(id)} className={classes.tabBtn(template === id)}>
             {label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className={classes.body}>
         {/* Hours display */}
-        <div style={{
-          fontSize: '3rem', fontWeight: 900, textAlign: 'center',
-          border: '2px solid #dee2e6', borderRadius: 10, padding: '8px 0',
-          background: '#f8f9fa', letterSpacing: 2,
-        }}>
-          {hrs}h
-        </div>
+        <div className={classes.hoursDisplay}>{hrs}h</div>
 
         {/* Numpad */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div className={classes.numpadGrid}>
           {DIGITS.map(d => (
-            <button
-              key={d}
-              onClick={() => appendDigit(d)}
-              style={{
-                minHeight: 68, fontSize: '1.5rem', fontWeight: 700,
-                border: '1px solid #ced4da', borderRadius: 10, background: '#fff',
-              }}
-            >
-              {d}
-            </button>
+            <button key={d} onClick={() => appendDigit(d)} className={classes.digitBtn}>{d}</button>
           ))}
-          <button
-            onClick={() => setHrs(prev => Math.floor(prev / 10))}
-            style={{
-              minHeight: 68, fontSize: '1.5rem',
-              border: '1px solid #ced4da', borderRadius: 10, background: '#fff3f3', color: '#dc3545',
-            }}
-          >
-            ⌫
-          </button>
+          <button onClick={() => setHrs(prev => Math.floor(prev / 10))} className={classes.deleteBtn}>⌫</button>
         </div>
 
         {showPreview && <PrintPreview template={template} durationHrs={hrs} />}

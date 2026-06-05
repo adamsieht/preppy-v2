@@ -21,6 +21,21 @@ function cardStyle(temp: number): { bg: string; border: string; color: string } 
   return { bg: '#d1e7dd', border: '#198754', color: '#0f5132' }
 }
 
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  noSensors:      'text-[#6c757d] p-4',
+  sensorGrid:     'grid grid-cols-2 gap-[10px] p-[10px]',
+  sensorBtn:      'min-h-[120px] border-[3px] border-solid rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer p-3',
+  sensorTemp:     'text-[2.4rem] font-black leading-none',
+  sensorHumidity: 'text-[0.9rem] opacity-80',
+  sensorMac:      'text-[0.7rem] opacity-60 overflow-hidden text-ellipsis whitespace-nowrap max-w-full',
+  backBtn:        'bg-transparent border border-[#ced4da] rounded-lg px-4 py-2 text-[1.1rem] min-h-[48px] text-[#495057]',
+  detailCard:     'text-center py-4 mb-4 rounded-xl border-2',
+  detailTemp:     'text-[4rem] font-black leading-none',
+  detailMeta:     'text-[1.1rem] opacity-80',
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function Tempy() {
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [selected, setSelected] = useState<string | null>(null)
@@ -54,14 +69,14 @@ export default function Tempy() {
     const style = sensor ? cardStyle(sensor.temperature) : { bg: '#f8f9fa', border: '#dee2e6', color: '#212529' }
     return (
       <PageLayout title={selected} right={
-        <button onClick={() => setSelected(null)} style={{ background: 'none', border: '1px solid #ced4da', borderRadius: 8, padding: '8px 16px', fontSize: '1.1rem', minHeight: 48 }}>← All</button>
+        <button onClick={() => setSelected(null)} className={classes.backBtn}>← All</button>
       }>
         {sensor && (
-          <div style={{ textAlign: 'center', padding: '16px 0', marginBottom: 16, background: style.bg, borderRadius: 12, border: `2px solid ${style.border}` }}>
-            <div style={{ fontSize: '4rem', fontWeight: 900, color: style.color, lineHeight: 1 }}>
+          <div className={classes.detailCard} style={{ background: style.bg, borderColor: style.border }}>
+            <div className={classes.detailTemp} style={{ color: style.color }}>
               {sensor.temperature.toFixed(1)}°F
             </div>
-            <div style={{ color: style.color, fontSize: '1.1rem', opacity: 0.8 }}>
+            <div className={classes.detailMeta} style={{ color: style.color }}>
               {sensor.humidity.toFixed(0)}% RH · {sensor.battery}% batt
             </div>
           </div>
@@ -74,41 +89,25 @@ export default function Tempy() {
   return (
     <PageLayout title="Temperatures" back="/" noPad>
       {sensors.length === 0 && (
-        <p style={{ color: '#6c757d', padding: 16 }}>No sensors detected.</p>
+        <p className={classes.noSensors}>No sensors detected.</p>
       )}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 10,
-        padding: 10,
-      }}>
+      <div className={classes.sensorGrid}>
         {sensors.map(s => {
           const style = cardStyle(s.temperature)
           return (
             <button
               key={s.mac}
               onClick={() => setSelected(s.mac)}
-              style={{
-                minHeight: 120,
-                border: `3px solid ${style.border}`,
-                borderRadius: 12,
-                background: style.bg,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                cursor: 'pointer',
-                padding: 12,
-              }}
+              className={classes.sensorBtn}
+              style={{ background: style.bg, borderColor: style.border }}
             >
-              <div style={{ fontSize: '2.4rem', fontWeight: 900, color: style.color, lineHeight: 1 }}>
+              <div className={classes.sensorTemp} style={{ color: style.color }}>
                 {s.temperature.toFixed(1)}°
               </div>
-              <div style={{ fontSize: '0.9rem', color: style.color, opacity: 0.8 }}>
+              <div className={classes.sensorHumidity} style={{ color: style.color }}>
                 {s.humidity.toFixed(0)}% RH
               </div>
-              <div style={{ fontSize: '0.7rem', color: style.color, opacity: 0.6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+              <div className={classes.sensorMac} style={{ color: style.color }}>
                 {s.mac}
               </div>
             </button>

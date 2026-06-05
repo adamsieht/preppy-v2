@@ -1,5 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 
+// ── Tailwind class map ──────────────────────────────────────────────────────
+const classes = {
+  btn: 'fixed bottom-4 right-4 z-[9999] bg-[rgba(220,53,69,0.85)] text-white border-0 rounded-md px-3 py-[6px] text-[0.75rem] font-mono font-bold tracking-[1px] cursor-pointer backdrop-blur-sm shadow-[0_2px_8px_rgba(0,0,0,0.3)] select-none',
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 export default function DebugButton() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -7,29 +13,7 @@ export default function DebugButton() {
   if (location.pathname === '/debug') return null
 
   return (
-    <button
-      onClick={() => navigate('/debug')}
-      title="Open debug panel"
-      style={{
-        position: 'fixed',
-        bottom: 16,
-        right: 16,
-        zIndex: 9999,
-        background: 'rgba(220, 53, 69, 0.85)',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 6,
-        padding: '6px 12px',
-        fontSize: '0.75rem',
-        fontFamily: 'monospace',
-        fontWeight: 700,
-        letterSpacing: 1,
-        cursor: 'pointer',
-        backdropFilter: 'blur(4px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        userSelect: 'none',
-      }}
-    >
+    <button onClick={() => navigate('/debug')} title="Open debug panel" className={classes.btn}>
       DEBUG
     </button>
   )

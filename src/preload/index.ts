@@ -24,6 +24,7 @@ export interface ElectronAPI {
   scanPrinters: () => Promise<UsbPrinterDevice[]>
   setPrinterDevice: (path: string) => Promise<{ success: boolean; device?: string; error?: string }>
   testPrinter: (path: string) => Promise<{ success: boolean; error?: string }>
+  setLabelHome: (x: number, y: number) => Promise<{ success: boolean; x?: number; y?: number; error?: string }>
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -70,4 +71,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanPrinters:     ()       => ipcRenderer.invoke(IPC.PRINTER_SCAN),
   setPrinterDevice: (p: string) => ipcRenderer.invoke(IPC.PRINTER_SET_DEVICE, p),
   testPrinter:      (p: string) => ipcRenderer.invoke(IPC.PRINTER_TEST, p),
+  setLabelHome:     (x: number, y: number) => ipcRenderer.invoke(IPC.PRINTER_SET_LABEL_HOME, x, y),
 } satisfies ElectronAPI)

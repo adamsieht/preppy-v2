@@ -4,8 +4,8 @@ import dayjs from 'dayjs'
 // ── Tailwind class map ──────────────────────────────────────────────────────
 const classes = {
   wrapper: 'flex items-center gap-3 shrink-0',
-  date:    'text-sm text-[#6c757d]',
-  time:    'text-sm font-bold',
+  date:    'text-sm text-[#768390]',
+  time:    'text-sm font-bold text-[#adbac7]',
 }
 // ───────────────────────────────────────────────────────────────────────────
 

@@ -13,12 +13,12 @@ interface Props {
 // ── Tailwind class map ──────────────────────────────────────────────────────
 const classes = {
   wrapper:  'flex flex-col h-full overflow-hidden',
-  header:   'flex items-center min-h-[64px] px-4 border-b border-[#dee2e6] bg-white shrink-0 gap-3',
-  backBtn:  'bg-transparent border border-[#ced4da] rounded-lg px-4 py-2 text-[1.1rem] min-h-[48px] text-[#495057]',
-  title:    'text-[1.3rem] font-bold grow',
-  cogBtn:   'bg-transparent border-0 text-[#6c757d] text-[1.4rem] leading-none cursor-pointer px-1 rounded shrink-0 hover:text-[#212529]',
+  header:   'flex items-center min-h-[48px] px-4 border-b border-[#30363d] bg-[#161b22] shrink-0 gap-3',
+  backBtn:  'bg-transparent border border-[#444c56] rounded-lg px-3 py-1.5 text-[1rem] min-h-[40px] text-[#adbac7]',
+  title:    'text-[1.15rem] font-bold grow text-[#e6edf3]',
+  cogBtn:   'bg-transparent border-0 text-[#768390] text-[1.25rem] leading-none cursor-pointer px-1 rounded shrink-0 hover:text-[#adbac7]',
   content:  (noPad?: boolean) => `flex-1 min-h-0 overflow-x-hidden overflow-y-auto${noPad ? '' : ' p-4'}`,
-  footer:   'border-t border-[#dee2e6] bg-white shrink-0',
+  footer:   'border-t border-[#30363d] bg-[#161b22] shrink-0',
 }
 // ───────────────────────────────────────────────────────────────────────────
 

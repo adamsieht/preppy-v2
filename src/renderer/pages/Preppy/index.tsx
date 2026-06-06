@@ -21,16 +21,19 @@ import { useErrorMsg } from '../../hooks/useErrorMsg'
 type LabelTemplate = 'IX' | 'OX' | 'UX'
 
 // ── Quick list types ─────────────────────────────────────────────────────────
+interface TemplateHrs { IX: number; OX: number; UX: number }
+
 interface BundleEntry {
-  hrs: number
-  qty: number
+  hrs:   TemplateHrs
+  qty:   number
+  name?: string        // display label (set when added from a quick item)
 }
 
 interface QuickSingleItem {
-  id: string
+  id:   string
   name: string
   type: 'item'
-  hrs: number
+  hrs:  TemplateHrs   // per-template expiry
 }
 
 interface QuickBundleItem {
@@ -109,16 +112,25 @@ function persist(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+function migrateHrs(raw: unknown): TemplateHrs {
+  if (typeof raw === 'number') return { IX: raw, OX: raw, UX: raw }
+  if (raw && typeof raw === 'object' && 'IX' in raw) return raw as TemplateHrs
+  return { IX: 4, OX: 4, UX: 4 }
+}
+
 function loadItems(): QuickListEntry[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(ITEMS_KEY) ?? '[]') as Array<{
-      id: string; name: string; type?: string; hrs?: number; entries?: BundleEntry[]
-    }>
+    const raw = JSON.parse(localStorage.getItem(ITEMS_KEY) ?? '[]') as Array<Record<string, unknown>>
     return raw.map(item => {
-      if (item.type === 'bundle' && Array.isArray(item.entries)) {
-        return { id: item.id, name: item.name, type: 'bundle' as const, entries: item.entries }
+      if (item['type'] === 'bundle' && Array.isArray(item['entries'])) {
+        const entries: BundleEntry[] = (item['entries'] as Array<Record<string, unknown>>).map(e => ({
+          hrs:  migrateHrs(e['hrs']),
+          qty:  (e['qty'] as number) ?? 1,
+          name: e['name'] as string | undefined,
+        }))
+        return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, entries }
       }
-      return { id: item.id, name: item.name, type: 'item' as const, hrs: item.hrs ?? 4 }
+      return { id: item['id'] as string, name: item['name'] as string, type: 'item' as const, hrs: migrateHrs(item['hrs']) }
     })
   } catch { return [] }
 }
@@ -226,28 +238,39 @@ const classes = {
 
 // ── Add Bundle full-screen page ─────────────────────────────────────────────
 interface AddBundlePageProps {
+  quickItems:      QuickSingleItem[]
   durationOptions: { label: string; hrs: number }[]
   onAdd:   (name: string, entries: BundleEntry[]) => void
   onClose: () => void
 }
 
-function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) {
+function AddBundlePage({ quickItems, durationOptions, onAdd, onClose }: AddBundlePageProps) {
   const [name,       setName]       = useState('')
   const [entries,    setEntries]    = useState<BundleEntry[]>([])
-  const [pendingHrs, setPendingHrs] = useState(durationOptions[2]?.hrs ?? 4)
-  const [pendingQty, setPendingQty] = useState(1)
+  // qty per quick-item row (keyed by item id)
+  const [itemQtys,   setItemQtys]   = useState<Record<string, number>>({})
+  // custom entry fields
+  const [cHrsIX, setCHrsIX] = useState(durationOptions[2]?.hrs ?? 4)
+  const [cHrsOX, setCHrsOX] = useState(durationOptions[2]?.hrs ?? 4)
+  const [cHrsUX, setCHrsUX] = useState(durationOptions[2]?.hrs ?? 4)
+  const [cQty,   setCQty]   = useState(1)
 
-  function addEntry() {
-    setEntries(prev => [...prev, { hrs: pendingHrs, qty: pendingQty }])
-    setPendingQty(1)
+  function itemQty(id: string) { return itemQtys[id] ?? 1 }
+  function setItemQty(id: string, q: number) { setItemQtys(prev => ({ ...prev, [id]: Math.max(1, Math.min(99, q)) })) }
+
+  function addFromQuickItem(item: QuickSingleItem) {
+    const qty = itemQty(item.id)
+    setEntries(prev => [...prev, { hrs: item.hrs, qty, name: item.name }])
   }
 
-  function removeEntry(i: number) {
-    setEntries(prev => prev.filter((_, idx) => idx !== i))
+  function addCustomEntry() {
+    setEntries(prev => [...prev, { hrs: { IX: cHrsIX, OX: cHrsOX, UX: cHrsUX }, qty: cQty }])
+    setCQty(1)
   }
 
-  function updateQty(i: number, qty: number) {
-    setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty } : e))
+  function removeEntry(i: number) { setEntries(prev => prev.filter((_, idx) => idx !== i)) }
+  function updateQty(i: number, q: number) {
+    setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty: Math.max(1, Math.min(99, q)) } : e))
   }
 
   function handleSave() {
@@ -258,14 +281,15 @@ function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) 
 
   const totalLabels = entries.reduce((s, e) => s + e.qty, 0)
 
+  const selectCls = 'bg-[#0d1117] border border-[#30363d] rounded px-2 py-[7px] text-white text-xs outline-none focus:border-[#28a745] cursor-pointer w-full'
+  const qtyBtn    = 'w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center shrink-0'
+  const sectionLbl = 'text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2'
+
   return (
     <div className="fixed inset-0 z-[300] bg-[#0d1117] flex flex-col">
       {/* Header */}
       <div className="flex items-center px-4 py-3 border-b border-[#30363d] shrink-0">
-        <button
-          onClick={onClose}
-          className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors"
-        >← Cancel</button>
+        <button onClick={onClose} className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors">← Cancel</button>
         <span className="flex-1 text-center text-white font-bold text-lg">New Bundle</span>
         <button
           onClick={handleSave}
@@ -279,11 +303,9 @@ function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) 
 
           {/* Bundle name */}
           <div>
-            <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">Bundle Name</div>
+            <div className={sectionLbl}>Bundle Name</div>
             <input
-              autoFocus
-              value={name}
-              onChange={e => setName(e.target.value)}
+              autoFocus value={name} onChange={e => setName(e.target.value)}
               placeholder="e.g. Chicken Prep"
               className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3 text-white text-base placeholder:text-[#484f58] outline-none focus:border-[#28a745]"
             />
@@ -292,65 +314,76 @@ function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) 
           {/* Current entries */}
           {entries.length > 0 && (
             <div>
-              <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">
-                Labels in this bundle
-                <span className="ml-2 text-[#484f58] normal-case font-normal">{totalLabels} per print</span>
+              <div className={sectionLbl}>
+                Labels in bundle <span className="ml-1 text-[#484f58] normal-case font-normal">({totalLabels} per print)</span>
               </div>
               <div className="flex flex-col gap-2">
                 {entries.map((entry, i) => (
-                  <div key={i} className="flex items-center gap-3 bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3">
-                    <span className="flex-1 text-white font-medium text-sm">{fmtDuration(entry.hrs)}</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQty(i, Math.max(1, entry.qty - 1))}
-                        className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
-                      >−</button>
-                      <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{entry.qty}</span>
-                      <button
-                        onClick={() => updateQty(i, Math.min(99, entry.qty + 1))}
-                        className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
-                      >+</button>
+                  <div key={i} className="flex items-center gap-3 bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-[10px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{entry.name ?? 'Custom'}</div>
+                      {!entry.name && (
+                        <div className="text-[#6e7681] text-xs mt-[1px]">
+                          IX {fmtDuration(entry.hrs.IX)} · OX {fmtDuration(entry.hrs.OX)} · UX {fmtDuration(entry.hrs.UX)}
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => removeEntry(i)}
-                      className="w-8 h-8 rounded text-[#6e7681] hover:text-[#f85149] cursor-pointer bg-transparent border-0 text-base flex items-center justify-center transition-colors"
-                    >✕</button>
+                    <button onClick={() => updateQty(i, entry.qty - 1)} className={qtyBtn}>−</button>
+                    <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{entry.qty}</span>
+                    <button onClick={() => updateQty(i, entry.qty + 1)} className={qtyBtn}>+</button>
+                    <button onClick={() => removeEntry(i)} className="w-8 h-8 rounded text-[#6e7681] hover:text-[#f85149] cursor-pointer bg-transparent border-0 flex items-center justify-center transition-colors">✕</button>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Add entry form */}
-          <div>
-            <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">
-              {entries.length === 0 ? 'Add First Label' : 'Add Another Label'}
-            </div>
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col gap-2">
-              <select
-                value={pendingHrs}
-                onChange={e => setPendingHrs(Number(e.target.value))}
-                className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-white text-sm outline-none focus:border-[#28a745] cursor-pointer"
-              >
-                {durationOptions.map(o => (
-                  <option key={o.hrs} value={o.hrs}>{o.label}</option>
+          {/* From quick items */}
+          {quickItems.length > 0 && (
+            <div>
+              <div className={sectionLbl}>Add from Quick Items</div>
+              <div className="flex flex-col gap-2">
+                {quickItems.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-[10px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{item.name}</div>
+                      <div className="text-[#6e7681] text-xs mt-[1px]">
+                        IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                      </div>
+                    </div>
+                    <button onClick={() => setItemQty(item.id, itemQty(item.id) - 1)} className={qtyBtn}>−</button>
+                    <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{itemQty(item.id)}</span>
+                    <button onClick={() => setItemQty(item.id, itemQty(item.id) + 1)} className={qtyBtn}>+</button>
+                    <button
+                      onClick={() => addFromQuickItem(item)}
+                      className="shrink-0 px-3 py-[6px] rounded bg-[#28a745] border-0 text-white text-xs font-bold cursor-pointer hover:bg-[#2ea043] transition-colors"
+                    >+ Add</button>
+                  </div>
                 ))}
-              </select>
-              <div className="flex items-center gap-3">
+              </div>
+            </div>
+          )}
+
+          {/* Custom entry */}
+          <div>
+            <div className={sectionLbl}>Add Custom Entry</div>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col gap-2">
+              <div className="grid grid-cols-3 gap-2">
+                {([['IX', cHrsIX, setCHrsIX], ['OX', cHrsOX, setCHrsOX], ['UX', cHrsUX, setCHrsUX]] as const).map(([lbl, val, set]) => (
+                  <div key={lbl} className="flex flex-col gap-[3px]">
+                    <span className="text-[#6e7681] text-[9px] text-center font-semibold uppercase tracking-wide">{lbl}</span>
+                    <select value={val} onChange={e => set(Number(e.target.value))} className={selectCls}>
+                      {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
                 <span className="text-[#6e7681] text-xs">Qty</span>
-                <button
-                  onClick={() => setPendingQty(q => Math.max(1, q - 1))}
-                  className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
-                >−</button>
-                <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{pendingQty}</span>
-                <button
-                  onClick={() => setPendingQty(q => Math.min(99, q + 1))}
-                  className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
-                >+</button>
-                <button
-                  onClick={addEntry}
-                  className="ml-auto px-5 py-[6px] rounded bg-[#28a745] border-0 text-white text-sm font-bold cursor-pointer hover:bg-[#2ea043] transition-colors"
-                >+ Add</button>
+                <button onClick={() => setCQty(q => Math.max(1, q - 1))} className={qtyBtn}>−</button>
+                <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{cQty}</span>
+                <button onClick={() => setCQty(q => Math.min(99, q + 1))} className={qtyBtn}>+</button>
+                <button onClick={addCustomEntry} className="ml-auto px-4 py-[6px] rounded bg-[#28a745] border-0 text-white text-xs font-bold cursor-pointer hover:bg-[#2ea043] transition-colors">+ Add</button>
               </div>
             </div>
           </div>
@@ -365,22 +398,29 @@ function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) 
 interface PanelProps {
   onPrint:         (hrs: number, qty: number) => void
   onPrintBundle:   (entries: BundleEntry[], multiplier: number) => void
+  template:        LabelTemplate
   durationOptions: { label: string; hrs: number }[]
   collapsed:       boolean
   onToggleCollapse:() => void
 }
 
-function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
+function QuickItemsPanel({ onPrint, onPrintBundle, template, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
   const [name,          setName]          = useState('')
-  const [hrs,           setHrs]           = useState(durationOptions[2]?.hrs ?? 4)
+  const [hrsIX,         setHrsIX]         = useState(durationOptions[2]?.hrs ?? 4)
+  const [hrsOX,         setHrsOX]         = useState(durationOptions[2]?.hrs ?? 4)
+  const [hrsUX,         setHrsUX]         = useState(durationOptions[2]?.hrs ?? 4)
   const [tab,           setTab]           = useState<'items' | 'recent'>('items')
   const [recentJobs,    setRecentJobs]    = useState<PrintJob[]>([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [showAddBundle, setShowAddBundle] = useState(false)
 
   useEffect(() => {
-    setHrs(prev => durationOptions.some(o => o.hrs === prev) ? prev : (durationOptions[0]?.hrs ?? 4))
+    const first = durationOptions[0]?.hrs ?? 4
+    const valid = (h: number) => durationOptions.some(o => o.hrs === h) ? h : first
+    setHrsIX(valid)
+    setHrsOX(valid)
+    setHrsUX(valid)
   }, [durationOptions])
 
   useEffect(() => {
@@ -395,7 +435,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
   function addItem() {
     if (!name.trim()) return
     const id   = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const next: QuickListEntry[] = [...items, { id, name: name.trim(), type: 'item', hrs }]
+    const next: QuickListEntry[] = [...items, { id, name: name.trim(), type: 'item', hrs: { IX: hrsIX, OX: hrsOX, UX: hrsUX } }]
     setItems(next)
     persist(ITEMS_KEY, next)
     setName('')
@@ -464,7 +504,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
                 items.map(item => {
                   if (item.type === 'bundle') {
                     const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                    const summary = item.entries.map(e => fmtDuration(e.hrs)).join(' + ')
+                    const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
                     return (
                       <div key={item.id} className={classes.itemRow}>
                         <div className={classes.itemInfo}>
@@ -474,8 +514,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
                           </div>
                           <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
                         </div>
-                        <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(false)}>×1</button>
-                        <button onClick={() => onPrintBundle(item.entries, 5)} className={classes.itemBtn(true)}>×5</button>
+                        <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
                         <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                       </div>
                     )
@@ -484,10 +523,12 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
                     <div key={item.id} className={classes.itemRow}>
                       <div className={classes.itemInfo}>
                         <div className={classes.itemName}>{item.name}</div>
-                        <div className={classes.itemDur}>{fmtDuration(item.hrs)}</div>
+                        <div className={classes.itemDur}>
+                          IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                        </div>
                       </div>
-                      <button onClick={() => onPrint(item.hrs, 1)} className={classes.itemBtn(false)}>×1</button>
-                      <button onClick={() => onPrint(item.hrs, 5)} className={classes.itemBtn(true)}>×5</button>
+                      <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.itemBtn(false)}>×1</button>
+                      <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(true)}>×5</button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
@@ -505,11 +546,16 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
                 placeholder="e.g. Chicken Wings"
                 className={classes.addInput}
               />
-              <select value={hrs} onChange={e => setHrs(Number(e.target.value))} className={classes.addSelect}>
-                {durationOptions.map(o => (
-                  <option key={o.hrs} value={o.hrs}>{o.label}</option>
+              <div className="grid grid-cols-3 gap-1">
+                {([['IX', hrsIX, setHrsIX], ['OX', hrsOX, setHrsOX], ['UX', hrsUX, setHrsUX]] as const).map(([lbl, val, set]) => (
+                  <div key={lbl} className="flex flex-col gap-[3px]">
+                    <span className="text-[#6e7681] text-[9px] text-center font-semibold uppercase tracking-wide">{lbl}</span>
+                    <select value={val} onChange={e => set(Number(e.target.value))} className={classes.addSelect}>
+                      {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
+                    </select>
+                  </div>
                 ))}
-              </select>
+              </div>
               <div className="flex gap-2">
                 <button onClick={addItem} disabled={!name.trim()} className={classes.addBtn}>
                   + Add Item
@@ -553,6 +599,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, o
 
       {showAddBundle && (
         <AddBundlePage
+          quickItems={items.filter((i): i is QuickSingleItem => i.type === 'item')}
           durationOptions={durationOptions}
           onAdd={addBundle}
           onClose={() => setShowAddBundle(false)}
@@ -1153,7 +1200,7 @@ export default function Preppy() {
     for (const entry of entries) {
       const qty = entry.qty * multiplier
       try {
-        const result = await window.electronAPI.print({ template, durationHrs: entry.hrs, qty })
+        const result = await window.electronAPI.print({ template, durationHrs: entry.hrs[template], qty })
         if (!result.success) {
           setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: result.error ?? 'Print failed' } : t))
           return
@@ -1302,6 +1349,7 @@ export default function Preppy() {
             <QuickItemsPanel
               onPrint={handlePrint}
               onPrintBundle={handlePrintBundle}
+              template={template}
               durationOptions={allDurations}
               collapsed={panelCollapsed}
               onToggleCollapse={togglePanelCollapsed}

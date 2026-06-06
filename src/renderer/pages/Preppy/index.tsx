@@ -23,6 +23,10 @@ type LabelTemplate = 'IX' | 'OX' | 'UX'
 // ── Quick list types ─────────────────────────────────────────────────────────
 interface TemplateHrs { IX: number; OX: number; UX: number }
 
+type PrintQtyTarget =
+  | { kind: 'preset'; label: string; durationHrs: number }
+  | { kind: 'item';   label: string; templateHrs: TemplateHrs }
+
 interface BundleEntry {
   hrs:   TemplateHrs
   qty:   number
@@ -398,7 +402,7 @@ function AddBundlePage({ quickItems, durationOptions, onAdd, onClose }: AddBundl
 interface PanelProps {
   onPrint:         (hrs: number, qty: number) => void
   onPrintBundle:   (entries: BundleEntry[], multiplier: number) => void
-  onCustomPrint:   (hrs: number, label: string) => void
+  onCustomPrint:   (templateHrs: TemplateHrs, label: string) => void
   template:        LabelTemplate
   durationOptions: { label: string; hrs: number }[]
   collapsed:       boolean
@@ -530,7 +534,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
                       </div>
                       <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.itemBtn(false)}>×1</button>
                       <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(false)}>×5</button>
-                      <button onClick={() => onCustomPrint(item.hrs[template], item.name)} className={classes.itemBtn(true)}>×N</button>
+                      <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
@@ -803,16 +807,20 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
 
 // ── Print quantity numpad page ──────────────────────────────────────────────
 interface PrintQtyPageProps {
-  durationHrs: number
-  label:       string
-  template:    LabelTemplate
-  onPrint:     (qty: number) => void
-  onClose:     () => void
+  label:        string
+  initTemplate: LabelTemplate
+  templateHrs?: TemplateHrs   // item mode: switching template also changes duration
+  durationHrs:  number        // preset mode: duration is always this value
+  onPrint:      (qty: number, tpl: LabelTemplate) => void
+  onClose:      () => void
 }
 
-function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQtyPageProps) {
+function PrintQtyPage({ label, initTemplate, templateHrs, durationHrs, onPrint, onClose }: PrintQtyPageProps) {
   const [input, setInput] = useState('')
+  const [tpl,   setTpl]   = useState<LabelTemplate>(initTemplate)
 
+  // In item mode, duration changes with template; in preset mode it's fixed
+  const resolvedHrs = templateHrs ? templateHrs[tpl] : durationHrs
   const qty = parseInt(input, 10) || 0
 
   function pressDigit(d: string) {
@@ -824,30 +832,36 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
     })
   }
 
-  function pressBack() {
-    setInput(prev => prev.slice(0, -1))
-  }
-
-  function handleConfirm() {
-    if (qty < 1) return
-    onPrint(qty)
-  }
+  function pressBack() { setInput(prev => prev.slice(0, -1)) }
+  function handleConfirm() { if (qty >= 1) onPrint(qty, tpl) }
 
   return (
     <div className="fixed inset-0 z-[300] bg-[#0d1117] flex flex-col">
       <div className="flex items-center px-4 py-3 border-b border-[#30363d] shrink-0">
-        <button
-          onClick={onClose}
-          className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors"
-        >← Cancel</button>
+        <button onClick={onClose} className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors">← Cancel</button>
         <span className="flex-1 text-center text-white font-bold text-lg">Print {label}</span>
         <div className="w-[72px]" />
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-around px-6 py-4 max-w-sm mx-auto w-full min-h-0">
 
+        {/* Template switcher */}
+        <div className="flex gap-3 shrink-0">
+          {TEMPLATES.map(t => (
+            <button
+              key={t}
+              onClick={() => setTpl(t)}
+              className={`px-6 py-2 rounded-full font-bold text-sm border transition-colors cursor-pointer ${
+                tpl === t
+                  ? 'bg-[#28a745] border-[#28a745] text-white'
+                  : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681] hover:text-white'
+              }`}
+            >{t}</button>
+          ))}
+        </div>
+
         <div className="shrink-0">
-          <Label durationHrs={durationHrs} type={template} />
+          <Label durationHrs={resolvedHrs} type={tpl} />
         </div>
 
         <div className="flex flex-col items-center gap-2 shrink-0">
@@ -860,20 +874,16 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
 
         <div className="grid grid-cols-3 gap-2 w-full shrink-0">
           {NUMPAD_KEYS.map(key => {
-            if (key === '⌫') {
-              return (
-                <button key="back" onClick={pressBack} disabled={input.length === 0}
-                  className="h-16 rounded-xl bg-[#161b22] border border-[#30363d] text-white text-xl hover:bg-[#21262d] hover:border-[#6e7681] transition-colors disabled:opacity-30 cursor-pointer flex items-center justify-center"
-                >⌫</button>
-              )
-            }
-            if (key === '✓') {
-              return (
-                <button key="confirm" onClick={handleConfirm} disabled={qty < 1}
-                  className="h-16 rounded-xl bg-[#28a745] border-0 text-white text-lg font-bold hover:bg-[#2ea043] active:bg-[#238636] transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                >✓ Print</button>
-              )
-            }
+            if (key === '⌫') return (
+              <button key="back" onClick={pressBack} disabled={input.length === 0}
+                className="h-16 rounded-xl bg-[#161b22] border border-[#30363d] text-white text-xl hover:bg-[#21262d] hover:border-[#6e7681] transition-colors disabled:opacity-30 cursor-pointer flex items-center justify-center"
+              >⌫</button>
+            )
+            if (key === '✓') return (
+              <button key="confirm" onClick={handleConfirm} disabled={qty < 1}
+                className="h-16 rounded-xl bg-[#28a745] border-0 text-white text-lg font-bold hover:bg-[#2ea043] active:bg-[#238636] transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              >✓ Print</button>
+            )
             return (
               <button key={key} onClick={() => pressDigit(key)}
                 className="h-16 rounded-xl bg-[#161b22] border border-[#30363d] text-white text-2xl font-bold hover:bg-[#21262d] hover:border-[#6e7681] active:bg-[#28a745]/20 transition-colors cursor-pointer"
@@ -965,7 +975,7 @@ export default function Preppy() {
   const [showAddPreset,   setShowAddPreset]   = useState(false)
   const [editSort,        setEditSort]        = useState('')
   const [popularityMap,   setPopularityMap]   = useState<Map<number, number>>(new Map())
-  const [printQtyTarget,  setPrintQtyTarget]  = useState<{ durationHrs: number; label: string } | null>(null)
+  const [printQtyTarget,  setPrintQtyTarget]  = useState<PrintQtyTarget | null>(null)
   const [panelCollapsed,  setPanelCollapsed]  = useState(() =>
     localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true'
   )
@@ -1154,9 +1164,9 @@ export default function Preppy() {
   }
 
   // ── Print handlers ────────────────────────────────────────────────────────
-  async function handlePrint(durationHrs: number, qty: number) {
+  async function handlePrint(durationHrs: number, qty: number, tpl = template) {
     const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const lbl = `${template} ${fmtDuration(durationHrs)}`
+    const lbl = `${tpl} ${fmtDuration(durationHrs)}`
 
     // Toast starts locked at 0/qty until it reaches the front of the animation queue
     setToasts(prev => [...prev, { id, qty, done: 0, state: 'printing', label: lbl }])
@@ -1178,7 +1188,7 @@ export default function Preppy() {
     })
 
     try {
-      const result = await window.electronAPI.print({ template, durationHrs, qty })
+      const result = await window.electronAPI.print({ template: tpl, durationHrs, qty })
       if (result.success) {
         await animDone   // wait for animation to finish before showing checkmark
         setToasts(prev => prev.map(t => t.id === id ? { ...t, done: qty, state: 'success' } : t))
@@ -1221,7 +1231,10 @@ export default function Preppy() {
   }
 
   function handleCustomPrint(durationHrs: number, presetLabel: string) {
-    setPrintQtyTarget({ durationHrs, label: presetLabel })
+    setPrintQtyTarget({ kind: 'preset', durationHrs, label: presetLabel })
+  }
+  function handleCustomItemPrint(templateHrs: TemplateHrs, itemLabel: string) {
+    setPrintQtyTarget({ kind: 'item', templateHrs, label: itemLabel })
   }
 
   return (
@@ -1352,7 +1365,7 @@ export default function Preppy() {
             <QuickItemsPanel
               onPrint={handlePrint}
               onPrintBundle={handlePrintBundle}
-              onCustomPrint={handleCustomPrint}
+              onCustomPrint={handleCustomItemPrint}
               template={template}
               durationOptions={allDurations}
               collapsed={panelCollapsed}
@@ -1366,10 +1379,18 @@ export default function Preppy() {
       {/* ── Print quantity numpad page ── */}
       {printQtyTarget && (
         <PrintQtyPage
-          durationHrs={printQtyTarget.durationHrs}
           label={printQtyTarget.label}
-          template={template}
-          onPrint={qty => { void handlePrint(printQtyTarget.durationHrs, qty); setPrintQtyTarget(null) }}
+          initTemplate={template}
+          templateHrs={printQtyTarget.kind === 'item' ? printQtyTarget.templateHrs : undefined}
+          durationHrs={printQtyTarget.kind === 'preset' ? printQtyTarget.durationHrs : printQtyTarget.templateHrs[template]}
+          onPrint={(qty, tpl) => {
+            const hrs = printQtyTarget.kind === 'item'
+              ? printQtyTarget.templateHrs[tpl]
+              : printQtyTarget.durationHrs
+            setTemplate(tpl)
+            void handlePrint(hrs, qty, tpl)
+            setPrintQtyTarget(null)
+          }}
           onClose={() => setPrintQtyTarget(null)}
         />
       )}

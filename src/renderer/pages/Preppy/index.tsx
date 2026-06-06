@@ -128,6 +128,7 @@ const WIDTH_KEY           = 'preppy-left-width'
 const PRESET_ORDER_KEY    = 'preppy-preset-order'
 const HIDDEN_PRESETS_KEY  = 'preppy-hidden-presets'
 const PANEL_COLLAPSED_KEY = 'preppy-panel-collapsed'
+const LEFT_COLLAPSED_KEY  = 'preppy-left-collapsed'
 
 function loadStored<T>(key: string): T[] {
   try { return JSON.parse(localStorage.getItem(key) ?? '[]') }
@@ -228,7 +229,18 @@ const classes = {
   panelCount: 'text-[#6e7681] text-xs',
 
   // Panel collapse strip (shown when panel is collapsed)
-  collapseStrip: 'hidden xl:flex flex-col w-9 shrink-0 border-l border-[#30363d] items-center justify-start pt-3 bg-[#0d1117] cursor-pointer hover:bg-[#161b22] transition-colors select-none',
+  collapseStrip:     'hidden xl:flex flex-col w-9 shrink-0 border-l border-[#30363d] items-center justify-start pt-3 bg-[#0d1117] cursor-pointer hover:bg-[#161b22] transition-colors select-none',
+  // Left column collapse strip (shown when left column is collapsed)
+  leftCollapseStrip: 'hidden xl:flex flex-col w-9 shrink-0 border-r border-[#30363d] items-center justify-start pt-3 bg-[#0d1117] cursor-pointer hover:bg-[#161b22] transition-colors select-none',
+
+  // Quick items grid (wide panel)
+  panelGrid:     'flex-1 min-h-0 overflow-y-auto scrollbar-dark p-2 grid [grid-template-columns:repeat(auto-fill,minmax(190px,1fr))] gap-2 content-start',
+  gridCard:      'flex flex-col border border-[#30363d] rounded-lg bg-[#0d1117] overflow-hidden',
+  gridCardHead:  'flex items-center gap-1 px-2 pt-2 pb-0',
+  gridCardMeta:  'px-2 pb-1 text-[#6e7681] text-[11px] truncate',
+  gridCardBtns:  'flex gap-1 px-2 pb-2 pt-1',
+  gridCardBtn:   (green: boolean) => `flex-1 min-h-[40px] text-xs font-bold rounded border cursor-pointer disabled:opacity-60 transition-colors ${green ? 'border-[#28a745] bg-[#28a745] text-white hover:bg-[#2ea043]' : 'border-[#30363d] bg-[#161b22] text-white hover:border-[#6e7681]'}`,
+  gridCardIconBtn:'shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors',
 
   // Panel tabs
   panelTabBar: 'flex border-b border-[#30363d] shrink-0',
@@ -623,6 +635,20 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
   const [showAddBundle, setShowAddBundle] = useState(false)
   const [showAddItem,   setShowAddItem]   = useState(false)
   const [editingItem,   setEditingItem]   = useState<QuickSingleItem | null>(null)
+  const [isWide,        setIsWide]        = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = panelRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setIsWide(entry.contentRect.width > window.innerWidth / 2)
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (tab !== 'recent') return
@@ -711,7 +737,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
 
   return (
     <>
-      <div className={classes.panel}>
+      <div className={classes.panel} ref={panelRef}>
         {/* Header */}
         <div className={classes.panelHead}>
           <span className={classes.panelTitle}>Quick Items</span>
@@ -782,14 +808,45 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
               </div>
             </div>
 
-            <div className={classes.panelList}>
-              {visibleItems.length === 0 ? (
+            {visibleItems.length === 0 ? (
+              <div className={`${classes.panelList} flex`}>
                 <div className={classes.emptyState}>
                   <span className="text-white font-medium">{singleItems.length === 0 ? 'No items yet' : 'No items match filter'}</span>
                   <span>{singleItems.length === 0 ? 'Use the button below to add your first item' : 'Try a different category filter'}</span>
                 </div>
-              ) : (
-                visibleItems.map(item => {
+              </div>
+            ) : isWide ? (
+              /* ── Grid mode (panel wider than half the screen) ── */
+              <div className={classes.panelGrid}>
+                {visibleItems.map(item => {
+                  const cat = getCat(item.category ?? 'item', userCats)
+                  return (
+                    <div key={item.id} className={classes.gridCard}>
+                      <div className={classes.gridCardHead}>
+                        <span
+                          className={classes.catBadge}
+                          style={{ color: cat.color, borderColor: cat.color + '66' }}
+                        >{cat.label}</span>
+                        <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
+                        <button onClick={() => setEditingItem(item)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#58a6ff]`} title="Edit"><PencilIcon /></button>
+                        <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>
+                      </div>
+                      <div className={classes.gridCardMeta}>
+                        IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                      </div>
+                      <div className={classes.gridCardBtns}>
+                        <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.gridCardBtn(false)}>×1</button>
+                        <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.gridCardBtn(false)}>×5</button>
+                        <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              /* ── List mode ── */
+              <div className={classes.panelList}>
+                {visibleItems.map(item => {
                   const cat = getCat(item.category ?? 'item', userCats)
                   return (
                     <div key={item.id} className={classes.itemRow}>
@@ -812,9 +869,9 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
 
             {/* Add Item button — bottom right */}
             <div className="shrink-0 flex justify-end px-3 py-2 border-t border-[#30363d]">
@@ -1460,6 +1517,9 @@ export default function Preppy() {
   const [panelCollapsed,  setPanelCollapsed]  = useState(() =>
     localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true'
   )
+  const [leftCollapsed,   setLeftCollapsed]   = useState(() =>
+    localStorage.getItem(LEFT_COLLAPSED_KEY) === 'true'
+  )
   const [leftWidth, setLeftWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem(WIDTH_KEY) ?? '800', 10)
     return isNaN(saved) ? 800 : Math.max(440, Math.min(saved, 1600))
@@ -1541,6 +1601,12 @@ export default function Preppy() {
     const next = !panelCollapsed
     setPanelCollapsed(next)
     localStorage.setItem(PANEL_COLLAPSED_KEY, String(next))
+  }
+
+  function toggleLeftCollapsed() {
+    const next = !leftCollapsed
+    setLeftCollapsed(next)
+    localStorage.setItem(LEFT_COLLAPSED_KEY, String(next))
   }
 
   // ── Toast helpers ─────────────────────────────────────────────────────────
@@ -1773,7 +1839,16 @@ export default function Preppy() {
         {/* ── Main content row (left column + right panel) ── */}
         <div className={classes.contentRow}>
 
-          {/* ── Left column: tabbed Presets / Calendar ── */}
+          {/* ── Left column (or collapse strip) ── */}
+          {leftCollapsed && !editMode ? (
+            <div
+              className={classes.leftCollapseStrip}
+              onClick={toggleLeftCollapsed}
+              title="Expand presets"
+            >
+              <span className="text-[#6e7681] text-[18px] leading-none select-none">›</span>
+            </div>
+          ) : (
           <div
             className={classes.leftCol}
             style={isLargeScreen
@@ -1797,6 +1872,11 @@ export default function Preppy() {
                 >
                   Calendar
                 </button>
+                <button
+                  onClick={toggleLeftCollapsed}
+                  title="Collapse panel"
+                  className="w-9 shrink-0 flex items-center justify-center text-[#6e7681] hover:text-white hover:bg-[#21262d] cursor-pointer bg-transparent border-0 border-b-2 border-transparent transition-colors text-[16px] leading-none"
+                >‹</button>
               </div>
             )}
 
@@ -1859,6 +1939,7 @@ export default function Preppy() {
               </div>
             )}
           </div>
+          )} {/* end leftCollapsed ternary */}
 
           {/* ── Drag divider + Quick Items panel (hidden in edit mode) ── */}
           {!editMode && (

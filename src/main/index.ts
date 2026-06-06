@@ -7,10 +7,12 @@ app.commandLine.appendSwitch('disable-gpu')
 app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('disable-gpu-compositing')
 import { registerPrinterHandlers } from './ipc/handlers/printer.handler'
+import { registerPrinterSetupHandlers } from './ipc/handlers/printer-setup.handler'
 import { registerSensorHandlers } from './ipc/handlers/sensor.handler'
 import { registerWifiHandlers } from './ipc/handlers/wifi.handler'
 import { registerDbHandlers } from './ipc/handlers/db.handler'
 import { registerDebugHandlers } from './ipc/handlers/debug.handler'
+import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -40,10 +42,12 @@ app.whenReady().then(() => {
   logInfo('Preppy v2 starting up')
 
   registerPrinterHandlers()
+  registerPrinterSetupHandlers()
   registerSensorHandlers()
   registerWifiHandlers()
   registerDbHandlers()
   registerDebugHandlers()
+  registerSystemHandlers()
 
   logInfo('IPC handlers registered')
 

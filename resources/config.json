@@ -8,7 +8,9 @@
   "printer": {
     "device": "/dev/usb/lp0",
     "zplTemplateDir": "resources/zpl",
-    "simulate": false
+    "simulate": false,
+    "labelhomeX": 0,
+    "labelhomeY": 0
   },
   "sensor": {
     "pollIntervalMs": 10000,

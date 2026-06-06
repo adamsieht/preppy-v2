@@ -21,6 +21,11 @@ export interface PrintResult {
   error?: string
 }
 
+function injectLabelHome(zpl: string, x: number, y: number): string {
+  // Insert ^LH immediately after ^XA so it applies to the whole label
+  return zpl.replace(/(\^XA\r?\n?)/, `$1^LH${x},${y}\n`)
+}
+
 function fillTemplate(raw: string, durationHrs: number): string {
   const now = dayjs()
   const expiry = now.add(durationHrs, 'hour')
@@ -59,7 +64,11 @@ export function preview(args: Omit<PrintArgs, 'qty'>): PreviewResult {
 
   const now = dayjs()
   const expiry = now.add(args.durationHrs, 'hour')
-  const zpl = fillTemplate(raw, args.durationHrs)
+  const zpl = injectLabelHome(
+    fillTemplate(raw, args.durationHrs),
+    config.printer.labelhomeX ?? 0,
+    config.printer.labelhomeY ?? 0,
+  )
 
   return {
     success: true,
@@ -96,7 +105,11 @@ export function print(args: PrintArgs): PrintResult {
     return { success: false, error }
   }
 
-  const filled = fillTemplate(raw, args.durationHrs)
+  const filled = injectLabelHome(
+    fillTemplate(raw, args.durationHrs),
+    config.printer.labelhomeX ?? 0,
+    config.printer.labelhomeY ?? 0,
+  )
 
   const deviceExists = fs.existsSync(config.printer.device)
   const simulating = config.printer.simulate || !deviceExists

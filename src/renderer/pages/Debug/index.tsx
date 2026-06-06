@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import type { RootState } from '../../store'
 import { setVerboseErrors } from '../../store/slices/devSettings.slice'
@@ -80,6 +81,7 @@ export default function Debug() {
   const [rawZpl, setRawZpl] = useState('^XA\n^FO50,50^A0N,28,28^FDHELLO WORLD^FS\n^XZ')
   const [zplStatus, setZplStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [sendingZpl, setSendingZpl] = useState(false)
+  const navigate = useNavigate()
   const reduxState = useSelector((state: RootState) => state)
   const verboseErrors = useSelector((s: RootState) => s.devSettings.verboseErrors)
   const dispatch = useDispatch()
@@ -134,28 +136,49 @@ export default function Debug() {
   )
 
   return (
-    <PageLayout title="Debug" back right={headerRight} noPad>
-      {loading && <div className={classes.loadingText}>Loading…</div>}
+    <PageLayout title="Settings" back right={headerRight} noPad>
+      <div className="flex flex-col h-full">
 
-      {!loading && loadError && (
-        <div className={classes.errorBox}>
-          <strong>Failed to load debug info:</strong> {loadError}
+        {/* Quick navigation */}
+        <div className="flex gap-2 px-4 py-3 border-b border-[#dee2e6] bg-[#f8f9fa] shrink-0">
+          <button onClick={() => navigate('/printer-setup')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Printer Setup
+          </button>
+          <button onClick={() => navigate('/reports')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Reports
+          </button>
+          <button onClick={() => navigate('/wifi')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            WiFi
+          </button>
+          <button onClick={() => navigate('/label-calibration')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Label Calibration
+          </button>
+          <button onClick={() => navigate('/datetime-settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Date &amp; Time
+          </button>
         </div>
-      )}
 
-      {info && (
-        <div className="flex flex-col h-full">
-          {/* Tab bar */}
-          <div className={classes.tabsBar}>
-            {TABS.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)} className={classes.tabBtn(tab === t.key)}>
-                {t.title}
-              </button>
-            ))}
+        {loading && <div className={classes.loadingText}>Loading…</div>}
+
+        {!loading && loadError && (
+          <div className={classes.errorBox}>
+            <strong>Failed to load debug info:</strong> {loadError}
           </div>
+        )}
 
-          {/* Tab content */}
-          <div className={classes.tabContent}>
+        {info && (
+          <div className="flex flex-col flex-1 min-h-0">
+            {/* Tab bar */}
+            <div className={classes.tabsBar}>
+              {TABS.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} className={classes.tabBtn(tab === t.key)}>
+                  {t.title}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div className={classes.tabContent}>
 
             {/* ── System ──────────────────────────────────────────────────── */}
             {tab === 'system' && (
@@ -291,9 +314,11 @@ export default function Debug() {
               </>
             )}
 
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </PageLayout>
   )
 }

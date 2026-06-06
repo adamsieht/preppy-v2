@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../main/ipc/channels'
 import type { PrintArgs, LabelTemplate, PreviewResult } from '../main/services/printer.service'
-import type { Sensor, SensorLog, PrintJob, WifiCredentials } from '../main/services/db.service'
+import type { Sensor, SensorLog, PrintJob, WifiCredentials, DurationCount } from '../main/services/db.service'
+import type { UsbPrinterDevice } from '../main/services/usb-detection.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
 
 export interface ElectronAPI {
@@ -16,9 +17,18 @@ export interface ElectronAPI {
   getConfig: () => Promise<unknown>
   onLogLine: (cb: (line: string) => void) => () => void
   getPrintReport: () => Promise<PrintJob[]>
+  getPopularityMap: () => Promise<DurationCount[]>
   getTempReport: (mac?: string, limit?: number) => Promise<SensorLog[]>
   getDebugInfo: () => Promise<unknown>
   sendRawZpl: (zpl: string) => Promise<{ success: boolean; error?: string }>
+  scanPrinters: () => Promise<UsbPrinterDevice[]>
+  setPrinterDevice: (path: string) => Promise<{ success: boolean; device?: string; error?: string }>
+  testPrinter: (path: string) => Promise<{ success: boolean; error?: string }>
+  setLabelHome: (x: number, y: number) => Promise<{ success: boolean; x?: number; y?: number; error?: string }>
+  setSystemTime: (iso: string) => Promise<{ success: boolean; error?: string }>
+  openSystemTimeSettings: () => Promise<{ success: boolean; error?: string }>
+  enableNtp: () => Promise<{ success: boolean; error?: string }>
+  getPlatform: () => string
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -54,9 +64,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getPrintReport: () => ipcRenderer.invoke(IPC.REPORT_PRINTS),
 
+  getPopularityMap: () => ipcRenderer.invoke(IPC.REPORT_POPULARITY),
+
   getTempReport: (mac?: string, limit = 200) => ipcRenderer.invoke(IPC.REPORT_TEMPS, mac, limit),
 
   getDebugInfo: () => ipcRenderer.invoke(IPC.DEBUG_INFO),
 
   sendRawZpl: (zpl: string) => ipcRenderer.invoke(IPC.DEBUG_SEND_ZPL, zpl),
+
+  scanPrinters:     ()       => ipcRenderer.invoke(IPC.PRINTER_SCAN),
+  setPrinterDevice: (p: string) => ipcRenderer.invoke(IPC.PRINTER_SET_DEVICE, p),
+  testPrinter:      (p: string) => ipcRenderer.invoke(IPC.PRINTER_TEST, p),
+  setLabelHome:     (x: number, y: number) => ipcRenderer.invoke(IPC.PRINTER_SET_LABEL_HOME, x, y),
+  setSystemTime:         (iso: string) => ipcRenderer.invoke(IPC.SYSTEM_SET_TIME, iso),
+  openSystemTimeSettings:()            => ipcRenderer.invoke(IPC.SYSTEM_OPEN_TIME_SETTINGS),
+  enableNtp:             ()            => ipcRenderer.invoke(IPC.SYSTEM_ENABLE_NTP),
+  getPlatform:           ()            => process.platform,
 } satisfies ElectronAPI)

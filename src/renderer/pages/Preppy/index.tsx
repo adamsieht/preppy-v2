@@ -148,7 +148,7 @@ function timeAgo(iso: string): string {
 // ── Tailwind class map ──────────────────────────────────────────────────────
 const classes = {
   page:      'flex h-full bg-[#0d1117]',
-  leftCol:   'flex flex-col flex-1 xl:flex-none min-w-0',
+  leftCol:   'relative flex flex-col flex-1 xl:flex-none min-w-0',
   alertWrap: 'px-3 pt-3 shrink-0',
   selector:  'flex shrink-0',
   tmplBtn:   (active: boolean) => {
@@ -365,13 +365,12 @@ function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) 
 interface PanelProps {
   onPrint:         (hrs: number, qty: number) => void
   onPrintBundle:   (entries: BundleEntry[], multiplier: number) => void
-  printing:        boolean
   durationOptions: { label: string; hrs: number }[]
   collapsed:       boolean
   onToggleCollapse:() => void
 }
 
-function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
+function QuickItemsPanel({ onPrint, onPrintBundle, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
   const [name,          setName]          = useState('')
   const [hrs,           setHrs]           = useState(durationOptions[2]?.hrs ?? 4)
@@ -475,8 +474,8 @@ function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, co
                           </div>
                           <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
                         </div>
-                        <button onClick={() => onPrintBundle(item.entries, 1)} disabled={printing} className={classes.itemBtn(false)}>×1</button>
-                        <button onClick={() => onPrintBundle(item.entries, 5)} disabled={printing} className={classes.itemBtn(true)}>×5</button>
+                        <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(false)}>×1</button>
+                        <button onClick={() => onPrintBundle(item.entries, 5)} className={classes.itemBtn(true)}>×5</button>
                         <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                       </div>
                     )
@@ -487,8 +486,8 @@ function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, co
                         <div className={classes.itemName}>{item.name}</div>
                         <div className={classes.itemDur}>{fmtDuration(item.hrs)}</div>
                       </div>
-                      <button onClick={() => onPrint(item.hrs, 1)} disabled={printing} className={classes.itemBtn(false)}>×1</button>
-                      <button onClick={() => onPrint(item.hrs, 5)} disabled={printing} className={classes.itemBtn(true)}>×5</button>
+                      <button onClick={() => onPrint(item.hrs, 1)} className={classes.itemBtn(false)}>×1</button>
+                      <button onClick={() => onPrint(item.hrs, 5)} className={classes.itemBtn(true)}>×5</button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
@@ -512,7 +511,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, co
                 ))}
               </select>
               <div className="flex gap-2">
-                <button onClick={addItem} disabled={!name.trim() || printing} className={classes.addBtn}>
+                <button onClick={addItem} disabled={!name.trim()} className={classes.addBtn}>
                   + Add Item
                 </button>
                 <button onClick={() => setShowAddBundle(true)} className={classes.addBundleBtn}>
@@ -543,7 +542,6 @@ function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, co
                   </div>
                   <button
                     onClick={() => onPrint(job.duration_hrs, job.qty)}
-                    disabled={printing}
                     className={classes.recentBtn}
                   >Reprint</button>
                 </div>
@@ -841,67 +839,63 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
 }
 
 // ── Print toast (bottom overlay) ────────────────────────────────────────────
-interface PrintJobState {
+interface ToastState {
+  id:        string
   qty:       number
   done:      number
   state:     'printing' | 'success' | 'error'
+  label?:    string
   errorMsg?: string
+  removing?: boolean
 }
 
-function PrintToast({ qty, done, state, errorMsg, onDismiss }: PrintJobState & { onDismiss: () => void }) {
-  const onDismissRef = useRef(onDismiss)
-  onDismissRef.current = onDismiss
+function PrintToast({ qty, done, state, label, errorMsg, removing, onDismiss }: Omit<ToastState, 'id'> & { onDismiss: () => void }) {
+  const fade   = removing ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'
+  const pct    = qty > 0 ? Math.round((done / qty) * 100) : 0
+  const isDone = state === 'success'
 
-  useEffect(() => {
-    if (state !== 'success') return
-    const t = setTimeout(() => onDismissRef.current(), 2500)
-    return () => clearTimeout(t)
-  }, [state])
+  // Outer shell — transitions background and border color smoothly between states
+  const shellBg = state === 'error'   ? 'bg-[#3d1a1a] border-[#f85149]'
+                : state === 'success' ? 'bg-[#1a4731] border-[#2ea043]'
+                :                       'bg-[#161b22] border-[#30363d]'
+  const shell = `pointer-events-auto w-[230px] border rounded-xl px-3 py-[10px] shadow-[0_8px_28px_rgba(0,0,0,0.55)] animate-slide-up transition-[opacity,transform,background-color,border-color] duration-300 ${shellBg} ${fade}`
 
-  const pct = qty > 0 ? Math.round((done / qty) * 100) : 0
-
-  if (state === 'success') {
-    return (
-      <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up" onClick={onDismiss}>
-        <div className="bg-[#1a4731] border border-[#2ea043] rounded-xl px-5 py-4 flex items-center gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.6)] cursor-pointer">
-          <span className="text-[#3fb950] text-xl leading-none">✓</span>
-          <span className="text-[#3fb950] font-bold text-base">
-            {qty === 1 ? '1 label printed' : `${qty} labels printed`}
-          </span>
-        </div>
+  if (state === 'error') return (
+    <div className={shell}>
+      <div className="flex items-center gap-2">
+        <span className="text-[#f85149]">✗</span>
+        <span className="text-[#ff7b72] text-xs flex-1 truncate">{errorMsg ?? 'Print failed'}</span>
+        <button onClick={onDismiss} className="shrink-0 text-[#f85149]/60 hover:text-[#f85149] text-lg leading-none cursor-pointer bg-transparent border-0">×</button>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (state === 'error') {
-    return (
-      <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up">
-        <div className="bg-[#3d1a1a] border border-[#f85149] rounded-xl px-5 py-4 flex items-center gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
-          <span className="text-[#f85149] text-xl leading-none">✗</span>
-          <span className="text-[#ff7b72] font-medium text-base flex-1 min-w-0 truncate">{errorMsg ?? 'Print failed'}</span>
-          <button onClick={onDismiss} className="shrink-0 text-[#f85149]/70 hover:text-[#f85149] text-2xl leading-none cursor-pointer bg-transparent border-0">×</button>
-        </div>
-      </div>
-    )
-  }
-
+  // Printing and success share the same two-row DOM structure — no layout jump on transition
   return (
-    <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up">
-      <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-5 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-[#adbac7] text-lg leading-none">🖨</span>
-          <span className="text-white font-bold text-base flex-1">
-            Printing{' '}
-            <span className="text-[#3fb950] tabular-nums">{done}</span>
-            <span className="text-[#6e7681]"> / {qty}</span>
-          </span>
-        </div>
-        <div className="h-[5px] bg-[#30363d] rounded-full overflow-hidden">
-          <div
-            className="h-full bg-[#28a745] rounded-full transition-[width] duration-300 ease-out"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+    <div className={shell} onClick={isDone ? onDismiss : undefined} style={{ cursor: isDone ? 'pointer' : undefined }}>
+      <div className="flex items-center gap-[6px] mb-[7px]">
+        <span className="text-sm leading-none shrink-0" style={{ color: isDone ? '#3fb950' : '#adbac7' }}>
+          {isDone ? '✓' : '🖨'}
+        </span>
+        <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: isDone ? '#3fb950' : '#ffffff' }}>
+          {isDone ? `${qty} label${qty !== 1 ? 's' : ''}` : `${done}`}
+          {!isDone && <span style={{ color: '#6e7681', fontWeight: 400 }}>/{qty}</span>}
+        </span>
+        {label && (
+          <span className="text-xs truncate" style={{ color: isDone ? '#2ea043' : '#8b949e' }}>{label}</span>
+        )}
+      </div>
+      <div className="h-[5px] bg-[#21262d] rounded-full overflow-hidden">
+        <div
+          className={isDone ? '' : 'animate-progress-stripes'}
+          style={{
+            height: '100%',
+            borderRadius: '9999px',
+            backgroundColor: isDone ? '#2ea043' : '#28a745',
+            width: `${pct}%`,
+            transition: 'width 0.95s ease-out, background-color 0.3s ease',
+          }}
+        />
       </div>
     </div>
   )
@@ -911,9 +905,9 @@ function PrintToast({ qty, done, state, errorMsg, onDismiss }: PrintJobState & {
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function Preppy() {
   const [template,        setTemplate]        = useState<LabelTemplate>('IX')
-  const [printJob,        setPrintJob]        = useState<PrintJobState | null>(null)
-  const printIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const printing = printJob?.state === 'printing'
+  const [toasts,          setToasts]          = useState<ToastState[]>([])
+  const animQueueRef   = useRef<Array<() => Promise<void>>>([])
+  const animRunningRef = useRef(false)
   const [customPresets,   setCustomPresets]   = useState<CustomPreset[]>(() => loadStored(PRESETS_KEY))
   const [presetOrder,     setPresetOrder]     = useState<string[]>(() => loadStored(PRESET_ORDER_KEY))
   const [hiddenPresets,   setHiddenPresets]   = useState<string[]>(() => loadStored(HIDDEN_PRESETS_KEY))
@@ -1009,6 +1003,34 @@ export default function Preppy() {
     localStorage.setItem(PANEL_COLLAPSED_KEY, String(next))
   }
 
+  // ── Toast helpers ─────────────────────────────────────────────────────────
+  function removeToast(id: string) {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
+  function startFadeOut(id: string, delayMs = 0) {
+    setTimeout(() => {
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, removing: true } : t))
+      setTimeout(() => removeToast(id), 500)
+    }, delayMs)
+  }
+
+  // Animation queue — animations play one at a time; API calls are independent and concurrent
+  async function drainAnimQueue() {
+    if (animRunningRef.current) return
+    animRunningRef.current = true
+    while (animQueueRef.current.length > 0) {
+      const next = animQueueRef.current.shift()!
+      await next()
+    }
+    animRunningRef.current = false
+  }
+  function enqueueAnimation(fn: () => Promise<void>): Promise<void> {
+    return new Promise(resolve => {
+      animQueueRef.current.push(async () => { await fn(); resolve() })
+      void drainAnimQueue()
+    })
+  }
+
   // ── Preset management ─────────────────────────────────────────────────────
   function addCustomPreset(hrs: number) {
     if (hrs < 1) return
@@ -1084,49 +1106,48 @@ export default function Preppy() {
 
   // ── Print handlers ────────────────────────────────────────────────────────
   async function handlePrint(durationHrs: number, qty: number) {
-    if (printIntervalRef.current) {
-      clearInterval(printIntervalRef.current)
-      printIntervalRef.current = null
-    }
+    const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const lbl = `${template} ${fmtDuration(durationHrs)}`
 
-    setPrintJob({ qty, done: 1, state: 'printing' })
+    // Toast starts locked at 0/qty until it reaches the front of the animation queue
+    setToasts(prev => [...prev, { id, qty, done: 0, state: 'printing', label: lbl }])
 
-    if (qty > 1) {
-      const msPerLabel = Math.max(80, Math.min(600, 2400 / qty))
-      let count = 1
-      printIntervalRef.current = setInterval(() => {
-        count += 1
-        if (count >= qty) {
-          clearInterval(printIntervalRef.current!)
-          printIntervalRef.current = null
-          return
-        }
-        setPrintJob(prev => prev?.state === 'printing' ? { ...prev, done: count } : prev)
-      }, msPerLabel)
-    }
+    let cancelled = false
+
+    // Enqueue animation — plays sequentially, one job at a time
+    // Starts at done=1 immediately (bar visible right away), then ticks every ~1s
+    const animDone = enqueueAnimation(async () => {
+      for (let count = 1; count <= qty; count++) {
+        if (cancelled) break
+        setToasts(prev => prev.map(t =>
+          t.id === id && t.state === 'printing' ? { ...t, done: count } : t
+        ))
+        // Always hold each tick for ~1s, including the last — lets the filled bar show before success
+        await new Promise<void>(r => setTimeout(r, 950))
+      }
+    })
 
     try {
       const result = await window.electronAPI.print({ template, durationHrs, qty })
-      if (printIntervalRef.current) { clearInterval(printIntervalRef.current); printIntervalRef.current = null }
       if (result.success) {
-        setPrintJob({ qty, done: qty, state: 'success' })
+        await animDone   // wait for animation to finish before showing checkmark
+        setToasts(prev => prev.map(t => t.id === id ? { ...t, done: qty, state: 'success' } : t))
+        startFadeOut(id, 3000)
       } else {
-        setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: result.error ?? 'Print failed' } : null)
+        cancelled = true
+        setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: result.error ?? 'Print failed' } : t))
       }
     } catch (err) {
-      if (printIntervalRef.current) { clearInterval(printIntervalRef.current); printIntervalRef.current = null }
-      setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : null)
+      cancelled = true
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : t))
     }
   }
 
   async function handlePrintBundle(entries: BundleEntry[], multiplier: number) {
-    if (printIntervalRef.current) {
-      clearInterval(printIntervalRef.current)
-      printIntervalRef.current = null
-    }
-
+    const id       = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const totalQty = entries.reduce((sum, e) => sum + e.qty * multiplier, 0)
-    setPrintJob({ qty: totalQty, done: 0, state: 'printing' })
+
+    setToasts(prev => [...prev, { id, qty: totalQty, done: 0, state: 'printing', label: `${template} Bundle` }])
 
     let done = 0
     for (const entry of entries) {
@@ -1134,18 +1155,19 @@ export default function Preppy() {
       try {
         const result = await window.electronAPI.print({ template, durationHrs: entry.hrs, qty })
         if (!result.success) {
-          setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: result.error ?? 'Print failed' } : null)
+          setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: result.error ?? 'Print failed' } : t))
           return
         }
         done += qty
-        setPrintJob(prev => prev?.state === 'printing' ? { ...prev, done } : prev)
+        setToasts(prev => prev.map(t => t.id === id && t.state === 'printing' ? { ...t, done } : t))
       } catch (err) {
-        setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : null)
+        setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : t))
         return
       }
     }
 
-    setPrintJob({ qty: totalQty, done: totalQty, state: 'success' })
+    setToasts(prev => prev.map(t => t.id === id ? { ...t, done: totalQty, state: 'success' } : t))
+    startFadeOut(id, 3000)
   }
 
   function handleCustomPrint(durationHrs: number, presetLabel: string) {
@@ -1171,7 +1193,7 @@ export default function Preppy() {
               <button
                 key={id}
                 onClick={() => setTemplate(id)}
-                disabled={printing || editMode}
+                disabled={editMode}
                 className={classes.tmplBtn(template === id)}
               >
                 {id}
@@ -1240,13 +1262,24 @@ export default function Preppy() {
                 <div key={id} className={classes.card}>
                   <div className={classes.cardHead}>{label}</div>
                   <div className={classes.cardBody}>
-                    <Label durationHrs={hrs} type={template} />
+                    <div onClick={() => void handlePrint(hrs, 1)} style={{ cursor: 'pointer' }}>
+                      <Label durationHrs={hrs} type={template} />
+                    </div>
                     <div className={classes.btnRow}>
-                      <button onClick={() => handlePrint(hrs, 5)} disabled={printing} className={classes.btn5}>🖨 5</button>
-                      <button onClick={() => handleCustomPrint(hrs, label)} disabled={printing} className={classes.btnX}>🖨 ×</button>
+                      <button onClick={() => void handlePrint(hrs, 5)} className={classes.btn5}>🖨 5</button>
+                      <button onClick={() => handleCustomPrint(hrs, label)} className={classes.btnX}>🖨 ×</button>
                     </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Print toasts — anchored inside left column, left of panel ── */}
+          {toasts.length > 0 && (
+            <div className="absolute bottom-4 right-4 z-[250] flex flex-row gap-3 items-end pointer-events-none">
+              {toasts.map(t => (
+                <PrintToast key={t.id} {...t} onDismiss={() => removeToast(t.id)} />
               ))}
             </div>
           )}
@@ -1269,7 +1302,6 @@ export default function Preppy() {
             <QuickItemsPanel
               onPrint={handlePrint}
               onPrintBundle={handlePrintBundle}
-              printing={printing}
               durationOptions={allDurations}
               collapsed={panelCollapsed}
               onToggleCollapse={togglePanelCollapsed}
@@ -1299,16 +1331,6 @@ export default function Preppy() {
         />
       )}
 
-      {/* ── Print toast ── */}
-      {printJob && (
-        <PrintToast
-          qty={printJob.qty}
-          done={printJob.done}
-          state={printJob.state}
-          errorMsg={printJob.errorMsg}
-          onDismiss={() => setPrintJob(null)}
-        />
-      )}
     </PageLayout>
   )
 }

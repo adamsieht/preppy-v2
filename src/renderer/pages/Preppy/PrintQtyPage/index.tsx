@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import Label from '../../components/Label'
-import type { LabelTemplate, TemplateHrs } from './types'
-import { TEMPLATES, NUMPAD_KEYS } from './constants'
+import Label from '../../../components/Label'
+import type { LabelTemplate, TemplateHrs } from '../types'
+import { TEMPLATES, NUMPAD_KEYS } from '../constants'
 
 interface PrintQtyPageProps {
   label:        string

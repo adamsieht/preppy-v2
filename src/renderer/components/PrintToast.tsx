@@ -1,4 +1,4 @@
-import type { ToastState } from '../types'
+import type { ToastState } from '../pages/Preppy/types'
 
 export default function PrintToast({ qty, done, state, label, errorMsg, removing, onDismiss }: Omit<ToastState, 'id'> & { onDismiss: () => void }) {
   const fade   = removing ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { QuickSingleItem, TemplateHrs, CategoryDef } from './types'
-import { CAT_PALETTE } from './constants'
-import { styles } from './AddEditItemPage.styles'
+import type { QuickSingleItem, TemplateHrs, CategoryDef } from '../types'
+import { CAT_PALETTE } from '../constants'
+import { styles } from './styles'
 
 interface AddEditItemPageProps {
   item?:           QuickSingleItem

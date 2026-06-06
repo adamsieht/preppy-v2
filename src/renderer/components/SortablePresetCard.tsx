@@ -1,8 +1,8 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import Label from '../../../components/Label'
+import Label from './Label'
 import { TrashIcon } from './Icons'
-import type { DisplayPreset, LabelTemplate } from '../types'
+import type { DisplayPreset, LabelTemplate } from '../pages/Preppy/types'
 import { classes } from './SortablePresetCard.styles'
 
 interface SortableCardProps {

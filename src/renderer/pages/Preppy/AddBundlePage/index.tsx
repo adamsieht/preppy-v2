@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { QuickSingleItem, BundleEntry } from './types'
-import { fmtDuration } from './utils'
-import { styles } from './AddBundlePage.styles'
+import type { QuickSingleItem, BundleEntry } from '../types'
+import { fmtDuration } from '../utils'
+import { styles } from './styles'
 
 interface AddBundlePageProps {
   quickItems:      QuickSingleItem[]

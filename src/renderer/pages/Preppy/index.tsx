@@ -21,10 +21,10 @@ import { loadStored, persist, autoLabel, fmtDuration } from './utils'
 import { classes } from './Preppy.styles'
 import AddPresetPage from './AddPresetPage'
 import PrintQtyPage from './PrintQtyPage'
-import PrintToast from './components/PrintToast'
-import SortablePresetCard from './components/SortablePresetCard'
-import CalendarPicker from './components/CalendarPicker'
-import QuickItemsPanel from './components/QuickItemsPanel'
+import PrintToast from '../../components/PrintToast'
+import SortablePresetCard from '../../components/SortablePresetCard'
+import CalendarPicker from '../../components/CalendarPicker'
+import QuickItemsPanel from '../../components/QuickItemsPanel'
 
 export default function Preppy() {
   const [template,        setTemplate]        = useState<LabelTemplate>('IX')

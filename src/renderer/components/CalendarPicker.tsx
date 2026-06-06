@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import dayjs from 'dayjs'
-import Label from '../../../components/Label'
-import type { LabelTemplate } from '../types'
+import Label from './Label'
+import type { LabelTemplate } from '../pages/Preppy/types'
 import { styles } from './CalendarPicker.styles'
 
 interface CalendarPickerProps {

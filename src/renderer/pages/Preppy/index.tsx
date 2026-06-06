@@ -20,11 +20,36 @@ import { useErrorMsg } from '../../hooks/useErrorMsg'
 
 type LabelTemplate = 'IX' | 'OX' | 'UX'
 
-interface QuickItem {
+// ── Quick list types ─────────────────────────────────────────────────────────
+interface BundleEntry {
+  hrs: number
+  qty: number
+}
+
+interface QuickSingleItem {
   id: string
   name: string
+  type: 'item'
   hrs: number
 }
+
+interface QuickBundleItem {
+  id: string
+  name: string
+  type: 'bundle'
+  entries: BundleEntry[]
+}
+
+type QuickListEntry = QuickSingleItem | QuickBundleItem
+
+interface PrintJob {
+  template: string
+  duration_hrs: number
+  qty: number
+  printed_at: string
+  success: number
+}
+// ────────────────────────────────────────────────────────────────────────────
 
 interface CustomPreset {
   id: string
@@ -33,7 +58,7 @@ interface CustomPreset {
 }
 
 interface DisplayPreset {
-  id: string        // "d-{hrs}" for defaults, custom id for user-created
+  id: string
   label: string
   hrs: number
   isDefault: boolean
@@ -69,11 +94,12 @@ const DEFAULT_DURATIONS = [
   { label: '30 days',  hrs: 720 },
 ]
 
-const ITEMS_KEY          = 'preppy-quick-items'
-const PRESETS_KEY        = 'preppy-custom-presets'
-const WIDTH_KEY          = 'preppy-left-width'
-const PRESET_ORDER_KEY   = 'preppy-preset-order'
-const HIDDEN_PRESETS_KEY = 'preppy-hidden-presets'
+const ITEMS_KEY           = 'preppy-quick-items'
+const PRESETS_KEY         = 'preppy-custom-presets'
+const WIDTH_KEY           = 'preppy-left-width'
+const PRESET_ORDER_KEY    = 'preppy-preset-order'
+const HIDDEN_PRESETS_KEY  = 'preppy-hidden-presets'
+const PANEL_COLLAPSED_KEY = 'preppy-panel-collapsed'
 
 function loadStored<T>(key: string): T[] {
   try { return JSON.parse(localStorage.getItem(key) ?? '[]') }
@@ -81,6 +107,20 @@ function loadStored<T>(key: string): T[] {
 }
 function persist(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value))
+}
+
+function loadItems(): QuickListEntry[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ITEMS_KEY) ?? '[]') as Array<{
+      id: string; name: string; type?: string; hrs?: number; entries?: BundleEntry[]
+    }>
+    return raw.map(item => {
+      if (item.type === 'bundle' && Array.isArray(item.entries)) {
+        return { id: item.id, name: item.name, type: 'bundle' as const, entries: item.entries }
+      }
+      return { id: item.id, name: item.name, type: 'item' as const, hrs: item.hrs ?? 4 }
+    })
+  } catch { return [] }
 }
 
 function fmtDuration(hrs: number): string {
@@ -93,6 +133,16 @@ function autoLabel(hrs: number): string {
   if (hrs < 24) return `${hrs} HR`
   const d = hrs / 24
   return Number.isInteger(d) ? `${d} DAY` : `${hrs} HR`
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(diff / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  return `${Math.floor(hr / 24)}d ago`
 }
 
 // ── Tailwind class map ──────────────────────────────────────────────────────
@@ -125,13 +175,25 @@ const classes = {
   dividerBar: 'w-[2px] h-12 rounded-full bg-[#30363d]',
 
   // Quick Items panel
-  panel:      'hidden xl:flex flex-col flex-1 border-l border-[#30363d] min-w-0',
-  panelHead:  'flex items-center justify-between px-4 py-3 border-b border-[#30363d] shrink-0',
-  panelTitle: 'text-white font-bold text-base',
+  panel:      'hidden xl:flex flex-col flex-1 border-l border-[#30363d] min-w-0 bg-[#0d1117]',
+  panelHead:  'flex items-center justify-between px-4 py-[10px] border-b border-[#30363d] shrink-0',
+  panelTitle: 'text-white font-bold text-sm',
   panelCount: 'text-[#6e7681] text-xs',
+
+  // Panel collapse strip (shown when panel is collapsed)
+  collapseStrip: 'hidden xl:flex flex-col w-9 shrink-0 border-l border-[#30363d] items-center justify-start pt-3 bg-[#0d1117] cursor-pointer hover:bg-[#161b22] transition-colors select-none',
+
+  // Panel tabs
+  panelTabBar: 'flex border-b border-[#30363d] shrink-0',
+  panelTab:    (active: boolean) => active
+    ? 'flex-1 py-[9px] text-xs font-bold text-white border-b-2 border-[#28a745] bg-transparent cursor-pointer transition-colors'
+    : 'flex-1 py-[9px] text-xs font-bold text-[#6e7681] border-b-2 border-transparent bg-transparent cursor-pointer hover:text-[#adbac7] transition-colors',
+
   panelList:  'flex-1 min-h-0 overflow-y-auto scrollbar-dark',
   emptyState: 'flex flex-col items-center justify-center h-full gap-2 text-[#6e7681] text-sm text-center px-6',
-  itemRow:    'flex items-center gap-2 px-3 py-3 border-b border-[#30363d] group hover:bg-[#161b22] transition-colors',
+
+  // Item rows
+  itemRow:    'flex items-center gap-2 px-3 py-[10px] border-b border-[#30363d] group hover:bg-[#161b22] transition-colors',
   itemInfo:   'flex-1 min-w-0',
   itemName:   'text-white text-sm font-medium leading-snug truncate',
   itemDur:    'text-[#6e7681] text-xs mt-[2px]',
@@ -140,36 +202,211 @@ const classes = {
       green ? 'border-[#28a745] bg-[#28a745] text-white' : 'border-[#30363d] bg-[#0d1117] text-white'
     }`,
   itemDelBtn: 'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] text-base leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity',
-  addForm:    'shrink-0 border-t border-[#30363d] p-3 flex flex-col gap-[6px]',
-  addLabel:   'text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-1',
-  addInput:   'w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-[8px] text-white text-sm placeholder:text-[#484f58] outline-none focus:border-[#28a745]',
-  addSelect:  'w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-[8px] text-white text-sm outline-none focus:border-[#28a745] cursor-pointer',
-  addBtn:     'w-full py-2 border-0 rounded bg-[#28a745] text-white text-sm font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+
+  // Bundle badge
+  bundleBadge: 'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold text-[#8b949e] bg-[#21262d] border border-[#30363d] mr-[5px]',
+
+  // Recent tab
+  recentRow:    'flex items-center gap-3 px-3 py-[10px] border-b border-[#30363d] group hover:bg-[#161b22] transition-colors',
+  recentBadge:  'shrink-0 w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white text-[10px] font-bold flex items-center justify-center',
+  recentInfo:   'flex-1 min-w-0',
+  recentMain:   'text-white text-sm font-medium',
+  recentSub:    'text-[#6e7681] text-xs mt-[1px]',
+  recentBtn:    'shrink-0 px-2 py-1 text-xs font-bold rounded border border-[#30363d] bg-[#0d1117] text-[#adbac7] cursor-pointer hover:border-[#6e7681] hover:text-white transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100',
+
+  // Add form
+  addForm:     'shrink-0 border-t border-[#30363d] p-3 flex flex-col gap-[6px]',
+  addLabel:    'text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-1',
+  addInput:    'w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-[8px] text-white text-sm placeholder:text-[#484f58] outline-none focus:border-[#28a745]',
+  addSelect:   'w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-[8px] text-white text-sm outline-none focus:border-[#28a745] cursor-pointer',
+  addBtn:      'flex-1 py-2 border-0 rounded bg-[#28a745] text-white text-sm font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+  addBundleBtn:'shrink-0 py-2 px-3 border border-[#30363d] rounded text-[#6e7681] text-sm font-bold cursor-pointer hover:border-[#6e7681] hover:text-white transition-colors whitespace-nowrap',
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-interface PanelProps {
-  onPrint:         (hrs: number, qty: number) => void
-  printing:        boolean
+// ── Add Bundle full-screen page ─────────────────────────────────────────────
+interface AddBundlePageProps {
   durationOptions: { label: string; hrs: number }[]
+  onAdd:   (name: string, entries: BundleEntry[]) => void
+  onClose: () => void
 }
 
-function QuickItemsPanel({ onPrint, printing, durationOptions }: PanelProps) {
-  const [items, setItems] = useState<QuickItem[]>(() => loadStored(ITEMS_KEY))
-  const [name,  setName]  = useState('')
-  const [hrs,   setHrs]   = useState(durationOptions[2]?.hrs ?? 4)
+function AddBundlePage({ durationOptions, onAdd, onClose }: AddBundlePageProps) {
+  const [name,       setName]       = useState('')
+  const [entries,    setEntries]    = useState<BundleEntry[]>([])
+  const [pendingHrs, setPendingHrs] = useState(durationOptions[2]?.hrs ?? 4)
+  const [pendingQty, setPendingQty] = useState(1)
+
+  function addEntry() {
+    setEntries(prev => [...prev, { hrs: pendingHrs, qty: pendingQty }])
+    setPendingQty(1)
+  }
+
+  function removeEntry(i: number) {
+    setEntries(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function updateQty(i: number, qty: number) {
+    setEntries(prev => prev.map((e, idx) => idx === i ? { ...e, qty } : e))
+  }
+
+  function handleSave() {
+    if (!name.trim() || entries.length === 0) return
+    onAdd(name.trim(), entries)
+    onClose()
+  }
+
+  const totalLabels = entries.reduce((s, e) => s + e.qty, 0)
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-[#0d1117] flex flex-col">
+      {/* Header */}
+      <div className="flex items-center px-4 py-3 border-b border-[#30363d] shrink-0">
+        <button
+          onClick={onClose}
+          className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors"
+        >← Cancel</button>
+        <span className="flex-1 text-center text-white font-bold text-lg">New Bundle</span>
+        <button
+          onClick={handleSave}
+          disabled={!name.trim() || entries.length === 0}
+          className="px-4 py-1 text-sm font-bold text-white bg-[#28a745] border-0 rounded cursor-pointer hover:bg-[#2ea043] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >Save</button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-5 flex flex-col gap-5 max-w-lg mx-auto w-full">
+
+          {/* Bundle name */}
+          <div>
+            <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">Bundle Name</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Chicken Prep"
+              className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3 text-white text-base placeholder:text-[#484f58] outline-none focus:border-[#28a745]"
+            />
+          </div>
+
+          {/* Current entries */}
+          {entries.length > 0 && (
+            <div>
+              <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">
+                Labels in this bundle
+                <span className="ml-2 text-[#484f58] normal-case font-normal">{totalLabels} per print</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {entries.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3">
+                    <span className="flex-1 text-white font-medium text-sm">{fmtDuration(entry.hrs)}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => updateQty(i, Math.max(1, entry.qty - 1))}
+                        className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
+                      >−</button>
+                      <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{entry.qty}</span>
+                      <button
+                        onClick={() => updateQty(i, Math.min(99, entry.qty + 1))}
+                        className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
+                      >+</button>
+                    </div>
+                    <button
+                      onClick={() => removeEntry(i)}
+                      className="w-8 h-8 rounded text-[#6e7681] hover:text-[#f85149] cursor-pointer bg-transparent border-0 text-base flex items-center justify-center transition-colors"
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add entry form */}
+          <div>
+            <div className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2">
+              {entries.length === 0 ? 'Add First Label' : 'Add Another Label'}
+            </div>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col gap-2">
+              <select
+                value={pendingHrs}
+                onChange={e => setPendingHrs(Number(e.target.value))}
+                className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-white text-sm outline-none focus:border-[#28a745] cursor-pointer"
+              >
+                {durationOptions.map(o => (
+                  <option key={o.hrs} value={o.hrs}>{o.label}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-3">
+                <span className="text-[#6e7681] text-xs">Qty</span>
+                <button
+                  onClick={() => setPendingQty(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
+                >−</button>
+                <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{pendingQty}</span>
+                <button
+                  onClick={() => setPendingQty(q => Math.min(99, q + 1))}
+                  className="w-8 h-8 rounded bg-[#21262d] border border-[#30363d] text-white font-bold cursor-pointer hover:border-[#6e7681] transition-colors flex items-center justify-center"
+                >+</button>
+                <button
+                  onClick={addEntry}
+                  className="ml-auto px-5 py-[6px] rounded bg-[#28a745] border-0 text-white text-sm font-bold cursor-pointer hover:bg-[#2ea043] transition-colors"
+                >+ Add</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Quick Items panel ────────────────────────────────────────────────────────
+interface PanelProps {
+  onPrint:         (hrs: number, qty: number) => void
+  onPrintBundle:   (entries: BundleEntry[], multiplier: number) => void
+  printing:        boolean
+  durationOptions: { label: string; hrs: number }[]
+  collapsed:       boolean
+  onToggleCollapse:() => void
+}
+
+function QuickItemsPanel({ onPrint, onPrintBundle, printing, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
+  const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
+  const [name,          setName]          = useState('')
+  const [hrs,           setHrs]           = useState(durationOptions[2]?.hrs ?? 4)
+  const [tab,           setTab]           = useState<'items' | 'recent'>('items')
+  const [recentJobs,    setRecentJobs]    = useState<PrintJob[]>([])
+  const [recentLoading, setRecentLoading] = useState(false)
+  const [showAddBundle, setShowAddBundle] = useState(false)
 
   useEffect(() => {
     setHrs(prev => durationOptions.some(o => o.hrs === prev) ? prev : (durationOptions[0]?.hrs ?? 4))
   }, [durationOptions])
 
+  useEffect(() => {
+    if (tab !== 'recent') return
+    setRecentLoading(true)
+    window.electronAPI.getPrintHistory(30)
+      .then(jobs => setRecentJobs((jobs as unknown as PrintJob[]).filter(j => j.success === 1)))
+      .catch(() => {})
+      .finally(() => setRecentLoading(false))
+  }, [tab])
+
   function addItem() {
     if (!name.trim()) return
     const id   = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const next = [...items, { id, name: name.trim(), hrs }]
+    const next: QuickListEntry[] = [...items, { id, name: name.trim(), type: 'item', hrs }]
     setItems(next)
     persist(ITEMS_KEY, next)
     setName('')
+  }
+
+  function addBundle(bundleName: string, entries: BundleEntry[]) {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const next: QuickListEntry[] = [...items, { id, name: bundleName, type: 'bundle', entries }]
+    setItems(next)
+    persist(ITEMS_KEY, next)
   }
 
   function removeItem(id: string) {
@@ -178,53 +415,152 @@ function QuickItemsPanel({ onPrint, printing, durationOptions }: PanelProps) {
     persist(ITEMS_KEY, next)
   }
 
-  return (
-    <div className={classes.panel}>
-      <div className={classes.panelHead}>
-        <span className={classes.panelTitle}>Quick Items</span>
-        <span className={classes.panelCount}>{items.length} item{items.length !== 1 ? 's' : ''}</span>
+  // Collapsed: render a narrow strip with an expand button
+  if (collapsed) {
+    return (
+      <div
+        className={classes.collapseStrip}
+        onClick={onToggleCollapse}
+        title="Expand Quick Items"
+      >
+        <span className="text-[#6e7681] text-[18px] leading-none select-none">›</span>
       </div>
+    )
+  }
 
-      <div className={classes.panelList}>
-        {items.length === 0 ? (
-          <div className={classes.emptyState}>
-            <span className="text-white font-medium">No items yet</span>
-            <span>Add commonly prepped items below to print their labels in one tap</span>
+  return (
+    <>
+      <div className={classes.panel}>
+        {/* Header */}
+        <div className={classes.panelHead}>
+          <span className={classes.panelTitle}>Quick Items</span>
+          <div className="flex items-center gap-2">
+            <span className={classes.panelCount}>
+              {items.length} item{items.length !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={onToggleCollapse}
+              title="Collapse panel"
+              className="w-7 h-7 flex items-center justify-center rounded text-[#6e7681] hover:text-white hover:bg-[#21262d] cursor-pointer bg-transparent border-0 transition-colors text-[16px] leading-none"
+            >‹</button>
           </div>
-        ) : (
-          items.map(item => (
-            <div key={item.id} className={classes.itemRow}>
-              <div className={classes.itemInfo}>
-                <div className={classes.itemName}>{item.name}</div>
-                <div className={classes.itemDur}>{fmtDuration(item.hrs)}</div>
-              </div>
-              <button onClick={() => onPrint(item.hrs, 1)} disabled={printing} className={classes.itemBtn(false)}>×1</button>
-              <button onClick={() => onPrint(item.hrs, 5)} disabled={printing} className={classes.itemBtn(true)}>×5</button>
-              <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className={classes.panelTabBar}>
+          <button className={classes.panelTab(tab === 'items')}  onClick={() => setTab('items')}>Items</button>
+          <button className={classes.panelTab(tab === 'recent')} onClick={() => setTab('recent')}>Recent</button>
+        </div>
+
+        {/* ── Items tab ── */}
+        {tab === 'items' && (
+          <>
+            <div className={classes.panelList}>
+              {items.length === 0 ? (
+                <div className={classes.emptyState}>
+                  <span className="text-white font-medium">No items yet</span>
+                  <span>Add commonly prepped items below to print their labels in one tap</span>
+                </div>
+              ) : (
+                items.map(item => {
+                  if (item.type === 'bundle') {
+                    const total   = item.entries.reduce((s, e) => s + e.qty, 0)
+                    const summary = item.entries.map(e => fmtDuration(e.hrs)).join(' + ')
+                    return (
+                      <div key={item.id} className={classes.itemRow}>
+                        <div className={classes.itemInfo}>
+                          <div className="flex items-center">
+                            <span className={classes.bundleBadge}>BUNDLE</span>
+                            <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+                          </div>
+                          <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
+                        </div>
+                        <button onClick={() => onPrintBundle(item.entries, 1)} disabled={printing} className={classes.itemBtn(false)}>×1</button>
+                        <button onClick={() => onPrintBundle(item.entries, 5)} disabled={printing} className={classes.itemBtn(true)}>×5</button>
+                        <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
+                      </div>
+                    )
+                  }
+                  return (
+                    <div key={item.id} className={classes.itemRow}>
+                      <div className={classes.itemInfo}>
+                        <div className={classes.itemName}>{item.name}</div>
+                        <div className={classes.itemDur}>{fmtDuration(item.hrs)}</div>
+                      </div>
+                      <button onClick={() => onPrint(item.hrs, 1)} disabled={printing} className={classes.itemBtn(false)}>×1</button>
+                      <button onClick={() => onPrint(item.hrs, 5)} disabled={printing} className={classes.itemBtn(true)}>×5</button>
+                      <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
+                    </div>
+                  )
+                })
+              )}
             </div>
-          ))
+
+            {/* Add form */}
+            <div className={classes.addForm}>
+              <div className={classes.addLabel}>Add to Quick List</div>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addItem() }}
+                placeholder="e.g. Chicken Wings"
+                className={classes.addInput}
+              />
+              <select value={hrs} onChange={e => setHrs(Number(e.target.value))} className={classes.addSelect}>
+                {durationOptions.map(o => (
+                  <option key={o.hrs} value={o.hrs}>{o.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <button onClick={addItem} disabled={!name.trim() || printing} className={classes.addBtn}>
+                  + Add Item
+                </button>
+                <button onClick={() => setShowAddBundle(true)} className={classes.addBundleBtn}>
+                  + Bundle
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Recent tab ── */}
+        {tab === 'recent' && (
+          <div className={classes.panelList}>
+            {recentLoading ? (
+              <div className="flex items-center justify-center h-full text-[#6e7681] text-sm">Loading…</div>
+            ) : recentJobs.length === 0 ? (
+              <div className={classes.emptyState}>
+                <span className="text-white font-medium">No print history</span>
+                <span>Successful print jobs will appear here</span>
+              </div>
+            ) : (
+              recentJobs.map((job, i) => (
+                <div key={i} className={classes.recentRow}>
+                  <div className={classes.recentBadge}>{job.template}</div>
+                  <div className={classes.recentInfo}>
+                    <div className={classes.recentMain}>{fmtDuration(job.duration_hrs)} · ×{job.qty}</div>
+                    <div className={classes.recentSub}>{timeAgo(job.printed_at)}</div>
+                  </div>
+                  <button
+                    onClick={() => onPrint(job.duration_hrs, job.qty)}
+                    disabled={printing}
+                    className={classes.recentBtn}
+                  >Reprint</button>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
 
-      <div className={classes.addForm}>
-        <div className={classes.addLabel}>Add Item</div>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') addItem() }}
-          placeholder="e.g. Chicken Wings"
-          className={classes.addInput}
+      {showAddBundle && (
+        <AddBundlePage
+          durationOptions={durationOptions}
+          onAdd={addBundle}
+          onClose={() => setShowAddBundle(false)}
         />
-        <select value={hrs} onChange={e => setHrs(Number(e.target.value))} className={classes.addSelect}>
-          {durationOptions.map(o => (
-            <option key={o.hrs} value={o.hrs}>{o.label}</option>
-          ))}
-        </select>
-        <button onClick={addItem} disabled={!name.trim() || printing} className={classes.addBtn}>
-          + Add to Quick Items
-        </button>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
 
@@ -274,7 +610,6 @@ function SortablePresetCard({ preset, template, onDelete }: SortableCardProps) {
       {...attributes}
       {...listeners}
     >
-      {/* Header row — label centred, trash button sits inside the bar */}
       <div className="flex items-center border-b border-[#30363d] shrink-0">
         <div className="w-8 shrink-0" />
         <div className="flex-1 text-center py-[6px] text-white text-base font-bold tracking-wide">
@@ -318,7 +653,7 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
       const candidate = prev + d
       const val = parseInt(candidate, 10)
       if (isNaN(val) || val > maxVal) return prev
-      return String(val)   // strips any leading zeros
+      return String(val)
     })
   }
 
@@ -339,8 +674,6 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
 
   return (
     <div className="fixed inset-0 z-[300] bg-[#0d1117] flex flex-col">
-
-      {/* Header */}
       <div className="flex items-center px-4 py-3 border-b border-[#30363d] shrink-0">
         <button
           onClick={onClose}
@@ -349,14 +682,11 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
           ← Cancel
         </button>
         <span className="flex-1 text-center text-white font-bold text-lg">New Preset</span>
-        {/* Right spacer mirrors the Cancel button so title stays centred */}
         <div className="w-[72px]" />
       </div>
 
-      {/* Body — vertically distributed */}
       <div className="flex-1 flex flex-col items-center justify-around px-6 py-4 max-w-sm mx-auto w-full min-h-0">
 
-        {/* Hours / Days toggle */}
         <div className="flex gap-3 shrink-0">
           {(['hours', 'days'] as const).map(u => (
             <button
@@ -373,7 +703,6 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
           ))}
         </div>
 
-        {/* Value display + label preview */}
         <div className="flex flex-col items-center gap-2 shrink-0">
           <div className="text-6xl font-bold text-white tracking-tight min-h-[72px] flex items-center justify-center">
             {input ? input : <span className="text-[#484f58]">0</span>}
@@ -388,7 +717,6 @@ function AddPresetPage({ template, onAdd, onClose }: AddPresetPageProps) {
           )}
         </div>
 
-        {/* 3×4 numpad */}
         <div className="grid grid-cols-3 gap-2 w-full shrink-0">
           {NUMPAD_KEYS.map(key => {
             if (key === '⌫') {
@@ -471,12 +799,10 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
 
       <div className="flex-1 flex flex-col items-center justify-around px-6 py-4 max-w-sm mx-auto w-full min-h-0">
 
-        {/* Label preview */}
         <div className="shrink-0">
           <Label durationHrs={durationHrs} type={template} />
         </div>
 
-        {/* Quantity display */}
         <div className="flex flex-col items-center gap-2 shrink-0">
           <div className="text-[#6e7681] text-sm font-medium">How many labels?</div>
           <div className="text-6xl font-bold text-white tracking-tight min-h-[72px] flex items-center justify-center">
@@ -485,7 +811,6 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
           <div className="text-[#6e7681] text-sm">max 500</div>
         </div>
 
-        {/* Numpad */}
         <div className="grid grid-cols-3 gap-2 w-full shrink-0">
           {NUMPAD_KEYS.map(key => {
             if (key === '⌫') {
@@ -585,20 +910,23 @@ function PrintToast({ qty, done, state, errorMsg, onDismiss }: PrintJobState & {
 
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function Preppy() {
-  const [template,      setTemplate]      = useState<LabelTemplate>('IX')
-  const [printJob,      setPrintJob]      = useState<PrintJobState | null>(null)
+  const [template,        setTemplate]        = useState<LabelTemplate>('IX')
+  const [printJob,        setPrintJob]        = useState<PrintJobState | null>(null)
   const printIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const printing = printJob?.state === 'printing'
-  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadStored(PRESETS_KEY))
-  const [presetOrder,   setPresetOrder]   = useState<string[]>(() => loadStored(PRESET_ORDER_KEY))
-  const [hiddenPresets, setHiddenPresets] = useState<string[]>(() => loadStored(HIDDEN_PRESETS_KEY))
-  const [editMode,       setEditMode]       = useState(false)
-  const [dndKey,         setDndKey]         = useState(0)
-  const [showAddPreset,  setShowAddPreset]  = useState(false)
-  const [editSort,       setEditSort]       = useState('')
-  const [popularityMap,  setPopularityMap]  = useState<Map<number, number>>(new Map())
-  const [printQtyTarget, setPrintQtyTarget] = useState<{ durationHrs: number; label: string } | null>(null)
-  const [leftWidth,     setLeftWidth]     = useState(() => {
+  const [customPresets,   setCustomPresets]   = useState<CustomPreset[]>(() => loadStored(PRESETS_KEY))
+  const [presetOrder,     setPresetOrder]     = useState<string[]>(() => loadStored(PRESET_ORDER_KEY))
+  const [hiddenPresets,   setHiddenPresets]   = useState<string[]>(() => loadStored(HIDDEN_PRESETS_KEY))
+  const [editMode,        setEditMode]        = useState(false)
+  const [dndKey,          setDndKey]          = useState(0)
+  const [showAddPreset,   setShowAddPreset]   = useState(false)
+  const [editSort,        setEditSort]        = useState('')
+  const [popularityMap,   setPopularityMap]   = useState<Map<number, number>>(new Map())
+  const [printQtyTarget,  setPrintQtyTarget]  = useState<{ durationHrs: number; label: string } | null>(null)
+  const [panelCollapsed,  setPanelCollapsed]  = useState(() =>
+    localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true'
+  )
+  const [leftWidth, setLeftWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem(WIDTH_KEY) ?? '800', 10)
     return isNaN(saved) ? 800 : Math.max(440, Math.min(saved, 1600))
   })
@@ -623,7 +951,6 @@ export default function Preppy() {
     }).catch(() => {})
   }, [editMode])
 
-  // Merge defaults + custom presets, apply custom order and hidden filter
   const allPresets = useMemo<DisplayPreset[]>(() => {
     const hiddenSet  = new Set(hiddenPresets)
     const defaultHrs = new Set(DEFAULT_PRESETS.map(p => p.hrs))
@@ -651,7 +978,6 @@ export default function Preppy() {
     })
   }, [customPresets, hiddenPresets, presetOrder])
 
-  // Duration options for QuickItemsPanel
   const allDurations = useMemo(() => {
     const defaultHrs = new Set(DEFAULT_DURATIONS.map(o => o.hrs))
     const extra = customPresets
@@ -675,6 +1001,12 @@ export default function Preppy() {
     const newW = Math.max(440, Math.min(divDragRef.current.startW + e.clientX - divDragRef.current.startX, window.innerWidth - 320))
     persist(WIDTH_KEY, newW)
     divDragRef.current = null
+  }
+
+  function togglePanelCollapsed() {
+    const next = !panelCollapsed
+    setPanelCollapsed(next)
+    localStorage.setItem(PANEL_COLLAPSED_KEY, String(next))
   }
 
   // ── Preset management ─────────────────────────────────────────────────────
@@ -707,7 +1039,6 @@ export default function Preppy() {
       setPresetOrder(nextOrder)
       persist(PRESET_ORDER_KEY, nextOrder)
     }
-    // bump key so DndContext remounts with clean transform state
     setDndKey(k => k + 1)
   }
 
@@ -726,7 +1057,6 @@ export default function Preppy() {
     setHiddenPresets(nextHidden)
     persist(HIDDEN_PRESETS_KEY, nextHidden)
 
-    // Restored defaults go to the front; existing visible presets keep their relative order
     const existingOrder = presetOrder.length > 0 ? presetOrder : allPresets.map(p => p.id)
     const nextOrder = [...restoredIds, ...existingOrder.filter(id => !restoredIds.includes(id))]
     setPresetOrder(nextOrder)
@@ -789,6 +1119,35 @@ export default function Preppy() {
     }
   }
 
+  async function handlePrintBundle(entries: BundleEntry[], multiplier: number) {
+    if (printIntervalRef.current) {
+      clearInterval(printIntervalRef.current)
+      printIntervalRef.current = null
+    }
+
+    const totalQty = entries.reduce((sum, e) => sum + e.qty * multiplier, 0)
+    setPrintJob({ qty: totalQty, done: 0, state: 'printing' })
+
+    let done = 0
+    for (const entry of entries) {
+      const qty = entry.qty * multiplier
+      try {
+        const result = await window.electronAPI.print({ template, durationHrs: entry.hrs, qty })
+        if (!result.success) {
+          setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: result.error ?? 'Print failed' } : null)
+          return
+        }
+        done += qty
+        setPrintJob(prev => prev?.state === 'printing' ? { ...prev, done } : prev)
+      } catch (err) {
+        setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : null)
+        return
+      }
+    }
+
+    setPrintJob({ qty: totalQty, done: totalQty, state: 'success' })
+  }
+
   function handleCustomPrint(durationHrs: number, presetLabel: string) {
     setPrintQtyTarget({ durationHrs, label: presetLabel })
   }
@@ -801,12 +1160,12 @@ export default function Preppy() {
         <div
           className={classes.leftCol}
           style={isLargeScreen
-            ? editMode
-              ? { flexGrow: 1, flexShrink: 1, width: '100%' }
+            ? (editMode || panelCollapsed)
+              ? { flexGrow: 1, flexShrink: 1 }
               : { width: leftWidth, flexShrink: 0, flexGrow: 0 }
             : undefined}
         >
-          {/* IX / OX / UX tabs + optional "+ New" + Edit/Done */}
+          {/* IX / OX / UX tabs + optional edit mode controls */}
           <div className={classes.selector}>
             {TEMPLATES.map((id) => (
               <button
@@ -854,7 +1213,7 @@ export default function Preppy() {
             </button>
           </div>
 
-          {/* Preset cards — normal view or edit/drag view */}
+          {/* Preset cards */}
           {editMode ? (
             <div className={classes.editRow}>
               <DndContext
@@ -896,19 +1255,24 @@ export default function Preppy() {
         {/* ── Drag divider + Quick Items panel (hidden in edit mode) ── */}
         {!editMode && (
           <>
-            <div
-              className={classes.divider}
-              onPointerDown={onDividerPointerDown}
-              onPointerMove={onDividerPointerMove}
-              onPointerUp={onDividerPointerUp}
-            >
-              <div className={classes.dividerBar} />
-            </div>
+            {!panelCollapsed && (
+              <div
+                className={classes.divider}
+                onPointerDown={onDividerPointerDown}
+                onPointerMove={onDividerPointerMove}
+                onPointerUp={onDividerPointerUp}
+              >
+                <div className={classes.dividerBar} />
+              </div>
+            )}
 
             <QuickItemsPanel
               onPrint={handlePrint}
+              onPrintBundle={handlePrintBundle}
               printing={printing}
               durationOptions={allDurations}
+              collapsed={panelCollapsed}
+              onToggleCollapse={togglePanelCollapsed}
             />
           </>
         )}
@@ -926,7 +1290,7 @@ export default function Preppy() {
         />
       )}
 
-      {/* ── Add Preset numpad page (full-screen overlay) ── */}
+      {/* ── Add Preset numpad page ── */}
       {showAddPreset && (
         <AddPresetPage
           template={template}

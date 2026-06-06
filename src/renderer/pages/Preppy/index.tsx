@@ -398,13 +398,14 @@ function AddBundlePage({ quickItems, durationOptions, onAdd, onClose }: AddBundl
 interface PanelProps {
   onPrint:         (hrs: number, qty: number) => void
   onPrintBundle:   (entries: BundleEntry[], multiplier: number) => void
+  onCustomPrint:   (hrs: number, label: string) => void
   template:        LabelTemplate
   durationOptions: { label: string; hrs: number }[]
   collapsed:       boolean
   onToggleCollapse:() => void
 }
 
-function QuickItemsPanel({ onPrint, onPrintBundle, template, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
+function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
   const [name,          setName]          = useState('')
   const [hrsIX,         setHrsIX]         = useState(durationOptions[2]?.hrs ?? 4)
@@ -528,7 +529,8 @@ function QuickItemsPanel({ onPrint, onPrintBundle, template, durationOptions, co
                         </div>
                       </div>
                       <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.itemBtn(false)}>×1</button>
-                      <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(true)}>×5</button>
+                      <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(false)}>×5</button>
+                      <button onClick={() => onCustomPrint(item.hrs[template], item.name)} className={classes.itemBtn(true)}>×N</button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
@@ -1169,8 +1171,9 @@ export default function Preppy() {
         setToasts(prev => prev.map(t =>
           t.id === id && t.state === 'printing' ? { ...t, done: count } : t
         ))
-        // Always hold each tick for ~1s, including the last — lets the filled bar show before success
-        await new Promise<void>(r => setTimeout(r, 950))
+        // Final tick holds ~1s so the full bar is visible before the success transition.
+        // Intermediate ticks are shorter so multi-label prints don't drag.
+        await new Promise<void>(r => setTimeout(r, count === qty ? 950 : 400))
       }
     })
 
@@ -1349,6 +1352,7 @@ export default function Preppy() {
             <QuickItemsPanel
               onPrint={handlePrint}
               onPrintBundle={handlePrintBundle}
+              onCustomPrint={handleCustomPrint}
               template={template}
               durationOptions={allDurations}
               collapsed={panelCollapsed}

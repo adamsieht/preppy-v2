@@ -10,6 +10,7 @@ export const IPC = {
   CONFIG_GET: 'config:get',
   LOGS_TAIL: 'logs:tail',
   REPORT_PRINTS: 'report:prints',
+  REPORT_POPULARITY: 'report:popularity',
   REPORT_TEMPS: 'report:temps',
   DEBUG_INFO: 'debug:info',
   DEBUG_SEND_ZPL: 'debug:send-zpl',

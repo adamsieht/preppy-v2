@@ -107,6 +107,7 @@ const classes = {
     return `flex-1 py-3 min-h-[52px] text-[1.05rem] font-bold border-b-2 border-[#28a745] cursor-pointer disabled:opacity-60 ${fill}`
   },
   newBtn:    'px-3 py-3 min-h-[52px] text-sm font-bold text-[#28a745] border-b-2 border-[#28a745] bg-transparent cursor-pointer shrink-0 hover:bg-[#28a745]/10 transition-colors',
+  sortSelect:'px-3 py-3 min-h-[52px] text-sm font-bold text-[#6e7681] border-b-2 border-[#30363d] bg-[#0d1117] cursor-pointer shrink-0 outline-none hover:text-white transition-colors',
   editBtn:   (active: boolean) => active
     ? 'px-4 py-3 min-h-[52px] text-sm font-bold text-white border-b-2 border-[#28a745] bg-[#28a745] cursor-pointer shrink-0'
     : 'px-4 py-3 min-h-[52px] text-sm font-bold text-[#6e7681] border-b-2 border-[#30363d] hover:text-white hover:border-[#6e7681] bg-transparent cursor-pointer transition-colors shrink-0',
@@ -526,6 +527,8 @@ export default function Preppy() {
   const [editMode,       setEditMode]       = useState(false)
   const [dndKey,         setDndKey]         = useState(0)
   const [showAddPreset,  setShowAddPreset]  = useState(false)
+  const [editSort,       setEditSort]       = useState('')
+  const [popularityMap,  setPopularityMap]  = useState<Map<number, number>>(new Map())
   const [printQtyTarget, setPrintQtyTarget] = useState<{ durationHrs: number; label: string } | null>(null)
   const [leftWidth,     setLeftWidth]     = useState(() => {
     const saved = parseInt(localStorage.getItem(WIDTH_KEY) ?? '800', 10)
@@ -544,6 +547,13 @@ export default function Preppy() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+
+  useEffect(() => {
+    if (!editMode) return
+    window.electronAPI.getPopularityMap().then(counts => {
+      setPopularityMap(new Map(counts.map(c => [c.duration_hrs, c.total_qty])))
+    }).catch(() => {})
+  }, [editMode])
 
   // Merge defaults + custom presets, apply custom order and hidden filter
   const allPresets = useMemo<DisplayPreset[]>(() => {
@@ -655,6 +665,16 @@ export default function Preppy() {
     persist(PRESET_ORDER_KEY, nextOrder)
   }
 
+  function handleSort(sort: string) {
+    if (!sort) return
+    const sorted = [...allPresets]
+    if (sort === 'asc')     sorted.sort((a, b) => a.hrs - b.hrs)
+    if (sort === 'desc')    sorted.sort((a, b) => b.hrs - a.hrs)
+    if (sort === 'popular') sorted.sort((a, b) => (popularityMap.get(b.hrs) ?? 0) - (popularityMap.get(a.hrs) ?? 0))
+    reorderPresets(sorted.map(p => p.id))
+    setEditSort('')
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -727,6 +747,18 @@ export default function Preppy() {
               >
                 ↩ Restore
               </button>
+            )}
+            {editMode && (
+              <select
+                value={editSort}
+                onChange={e => handleSort(e.target.value)}
+                className={classes.sortSelect}
+              >
+                <option value="">Sort…</option>
+                <option value="asc">Time ↑</option>
+                <option value="desc">Time ↓</option>
+                <option value="popular">Popular</option>
+              </select>
             )}
             {editMode && (
               <button

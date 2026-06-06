@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../main/ipc/channels'
 import type { PrintArgs, LabelTemplate, PreviewResult } from '../main/services/printer.service'
-import type { Sensor, SensorLog, PrintJob, WifiCredentials } from '../main/services/db.service'
+import type { Sensor, SensorLog, PrintJob, WifiCredentials, DurationCount } from '../main/services/db.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
 
 export interface ElectronAPI {
@@ -16,6 +16,7 @@ export interface ElectronAPI {
   getConfig: () => Promise<unknown>
   onLogLine: (cb: (line: string) => void) => () => void
   getPrintReport: () => Promise<PrintJob[]>
+  getPopularityMap: () => Promise<DurationCount[]>
   getTempReport: (mac?: string, limit?: number) => Promise<SensorLog[]>
   getDebugInfo: () => Promise<unknown>
   sendRawZpl: (zpl: string) => Promise<{ success: boolean; error?: string }>
@@ -53,6 +54,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   getPrintReport: () => ipcRenderer.invoke(IPC.REPORT_PRINTS),
+
+  getPopularityMap: () => ipcRenderer.invoke(IPC.REPORT_POPULARITY),
 
   getTempReport: (mac?: string, limit = 200) => ipcRenderer.invoke(IPC.REPORT_TEMPS, mac, limit),
 

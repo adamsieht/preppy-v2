@@ -143,6 +143,21 @@ export function insertPrintJob(job: Omit<PrintJob, 'id'>): void {
     .run(job)
 }
 
+export interface DurationCount {
+  duration_hrs: number
+  total_qty: number
+}
+
+export function getDurationCounts(): DurationCount[] {
+  return getDb()
+    .prepare(
+      `SELECT duration_hrs, SUM(qty) as total_qty
+       FROM print_jobs WHERE success = 1
+       GROUP BY duration_hrs`
+    )
+    .all() as DurationCount[]
+}
+
 export function getPrintJobs(limit = 50, offset = 0): PrintJob[] {
   return getDb()
     .prepare('SELECT * FROM print_jobs ORDER BY printed_at DESC LIMIT ? OFFSET ?')

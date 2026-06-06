@@ -12,6 +12,7 @@ import { registerSensorHandlers } from './ipc/handlers/sensor.handler'
 import { registerWifiHandlers } from './ipc/handlers/wifi.handler'
 import { registerDbHandlers } from './ipc/handlers/db.handler'
 import { registerDebugHandlers } from './ipc/handlers/debug.handler'
+import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 
 const isDev = process.env.NODE_ENV === 'development'
@@ -46,6 +47,7 @@ app.whenReady().then(() => {
   registerWifiHandlers()
   registerDbHandlers()
   registerDebugHandlers()
+  registerSystemHandlers()
 
   logInfo('IPC handlers registered')
 

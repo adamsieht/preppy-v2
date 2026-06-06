@@ -18,6 +18,9 @@ export const IPC = {
   REPORT_TEMPS: 'report:temps',
   DEBUG_INFO: 'debug:info',
   DEBUG_SEND_ZPL: 'debug:send-zpl',
+  SYSTEM_SET_TIME:          'system:set-time',
+  SYSTEM_OPEN_TIME_SETTINGS:'system:open-time-settings',
+  SYSTEM_ENABLE_NTP:        'system:enable-ntp',
 } as const
 
 export type IpcChannel = typeof IPC[keyof typeof IPC]

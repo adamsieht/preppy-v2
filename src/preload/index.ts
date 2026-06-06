@@ -25,6 +25,10 @@ export interface ElectronAPI {
   setPrinterDevice: (path: string) => Promise<{ success: boolean; device?: string; error?: string }>
   testPrinter: (path: string) => Promise<{ success: boolean; error?: string }>
   setLabelHome: (x: number, y: number) => Promise<{ success: boolean; x?: number; y?: number; error?: string }>
+  setSystemTime: (iso: string) => Promise<{ success: boolean; error?: string }>
+  openSystemTimeSettings: () => Promise<{ success: boolean; error?: string }>
+  enableNtp: () => Promise<{ success: boolean; error?: string }>
+  getPlatform: () => string
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -72,4 +76,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setPrinterDevice: (p: string) => ipcRenderer.invoke(IPC.PRINTER_SET_DEVICE, p),
   testPrinter:      (p: string) => ipcRenderer.invoke(IPC.PRINTER_TEST, p),
   setLabelHome:     (x: number, y: number) => ipcRenderer.invoke(IPC.PRINTER_SET_LABEL_HOME, x, y),
+  setSystemTime:         (iso: string) => ipcRenderer.invoke(IPC.SYSTEM_SET_TIME, iso),
+  openSystemTimeSettings:()            => ipcRenderer.invoke(IPC.SYSTEM_OPEN_TIME_SETTINGS),
+  enableNtp:             ()            => ipcRenderer.invoke(IPC.SYSTEM_ENABLE_NTP),
+  getPlatform:           ()            => process.platform,
 } satisfies ElectronAPI)

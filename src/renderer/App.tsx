@@ -7,7 +7,9 @@ const PrintX        = React.lazy(() => import('./pages/PrintX'))
 const WiFi          = React.lazy(() => import('./pages/WiFi'))
 const Reports       = React.lazy(() => import('./pages/Reports'))
 const Debug         = React.lazy(() => import('./pages/Debug'))
-const PrinterSetup  = React.lazy(() => import('./pages/PrinterSetup'))
+const PrinterSetup      = React.lazy(() => import('./pages/PrinterSetup'))
+const LabelCalibration  = React.lazy(() => import('./pages/LabelCalibration'))
+const DateTimeSettings  = React.lazy(() => import('./pages/DateTimeSettings'))
 
 export default function App() {
   return (
@@ -19,7 +21,9 @@ export default function App() {
           <Route path="/wifi"    element={<WiFi />}    />
           <Route path="/reports" element={<Reports />} />
           <Route path="/debug"          element={<Debug />}         />
-          <Route path="/printer-setup" element={<PrinterSetup />} />
+          <Route path="/printer-setup"    element={<PrinterSetup />}     />
+          <Route path="/label-calibration" element={<LabelCalibration />} />
+          <Route path="/datetime-settings" element={<DateTimeSettings />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

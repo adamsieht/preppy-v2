@@ -153,6 +153,9 @@ export default function Debug() {
           <button onClick={() => navigate('/label-calibration')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
             Label Calibration
           </button>
+          <button onClick={() => navigate('/datetime-settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Date &amp; Time
+          </button>
         </div>
 
         {loading && <div className={classes.loadingText}>Loading…</div>}

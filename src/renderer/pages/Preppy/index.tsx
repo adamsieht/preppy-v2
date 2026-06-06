@@ -34,10 +34,11 @@ interface BundleEntry {
 }
 
 interface QuickSingleItem {
-  id:   string
-  name: string
-  type: 'item'
-  hrs:  TemplateHrs   // per-template expiry
+  id:        string
+  name:      string
+  type:      'item'
+  hrs:       TemplateHrs   // per-template expiry
+  category?: string
 }
 
 interface QuickBundleItem {
@@ -73,6 +74,24 @@ interface DisplayPreset {
 
 const TEMPLATES: LabelTemplate[] = ['IX', 'OX', 'UX']
 
+interface CategoryDef { id: string; label: string; color: string }
+
+const ITEM_CATEGORIES: CategoryDef[] = [
+  { id: 'item',   label: 'Item',   color: '#6e7681' },
+  { id: 'veggie', label: 'Veggie', color: '#3fb950' },
+  { id: 'meat',   label: 'Meat',   color: '#f85149' },
+  { id: 'sauce',  label: 'Sauce',  color: '#e3b341' },
+]
+
+const CAT_PALETTE = [
+  '#3fb950', '#f85149', '#e3b341', '#58a6ff',
+  '#d2a8ff', '#ff7b72', '#79c0ff', '#ffa657',
+]
+
+function getCat(id: string, extra: CategoryDef[] = []) {
+  return [...extra, ...ITEM_CATEGORIES].find(c => c.id === id) ?? ITEM_CATEGORIES[0]
+}
+
 const DEFAULT_PRESETS = [
   { label: '4 HR',   hrs: 4   },
   { label: '8 HR',   hrs: 8   },
@@ -102,6 +121,7 @@ const DEFAULT_DURATIONS = [
 ]
 
 const ITEMS_KEY           = 'preppy-quick-items'
+const CATS_KEY            = 'preppy-quick-cats'
 const PRESETS_KEY         = 'preppy-custom-presets'
 const WIDTH_KEY           = 'preppy-left-width'
 const PRESET_ORDER_KEY    = 'preppy-preset-order'
@@ -122,6 +142,11 @@ function migrateHrs(raw: unknown): TemplateHrs {
   return { IX: 4, OX: 4, UX: 4 }
 }
 
+function loadUserCats(): CategoryDef[] {
+  try { return JSON.parse(localStorage.getItem(CATS_KEY) ?? '[]') }
+  catch { return [] }
+}
+
 function loadItems(): QuickListEntry[] {
   try {
     const raw = JSON.parse(localStorage.getItem(ITEMS_KEY) ?? '[]') as Array<Record<string, unknown>>
@@ -134,7 +159,7 @@ function loadItems(): QuickListEntry[] {
         }))
         return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, entries }
       }
-      return { id: item['id'] as string, name: item['name'] as string, type: 'item' as const, hrs: migrateHrs(item['hrs']) }
+      return { id: item['id'] as string, name: item['name'] as string, type: 'item' as const, hrs: migrateHrs(item['hrs']), category: (item['category'] as string | undefined) ?? 'item' }
     })
   } catch { return [] }
 }
@@ -217,10 +242,18 @@ const classes = {
     `shrink-0 px-3 py-[6px] text-xs font-bold rounded border cursor-pointer disabled:opacity-60 ${
       green ? 'border-[#28a745] bg-[#28a745] text-white' : 'border-[#30363d] bg-[#0d1117] text-white'
     }`,
-  itemDelBtn: 'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] text-base leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity',
+  itemDelBtn:  'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] text-base leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity',
+  itemEditBtn: 'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#58a6ff] leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center',
 
   // Bundle badge
   bundleBadge: 'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold text-[#8b949e] bg-[#21262d] border border-[#30363d] mr-[5px]',
+  // Category badge (color via inline style)
+  catBadge:    'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold border mr-[5px]',
+  // Sort/filter bar
+  filterBar:   'flex flex-wrap gap-1 px-3 pt-2 pb-1 border-b border-[#30363d] shrink-0',
+  filterPill:  (active: boolean) => active
+    ? 'px-2 py-[3px] rounded text-[10px] font-bold cursor-pointer border border-[#28a745] bg-[#28a745] text-white transition-colors'
+    : 'px-2 py-[3px] rounded text-[10px] font-bold cursor-pointer border border-[#30363d] bg-transparent text-[#6e7681] hover:text-white hover:border-[#6e7681] transition-colors',
 
   // Recent tab
   recentRow:    'flex items-center gap-3 px-3 py-[10px] border-b border-[#30363d] group hover:bg-[#161b22] transition-colors',
@@ -409,24 +442,181 @@ interface PanelProps {
   onToggleCollapse:() => void
 }
 
+type SortField = 'name' | 'cat' | 'recent'
+
+// ── Add / Edit Item full-screen page ─────────────────────────────────────────
+interface AddEditItemPageProps {
+  item?:           QuickSingleItem
+  categories:      CategoryDef[]
+  durationOptions: { label: string; hrs: number }[]
+  onSave:          (name: string, category: string, hrs: TemplateHrs) => void
+  onAddCategory:   (cat: CategoryDef) => void
+  onClose:         () => void
+}
+
+function AddEditItemPage({ item, categories, durationOptions, onSave, onAddCategory, onClose }: AddEditItemPageProps) {
+  const [name,       setName]       = useState(item?.name ?? '')
+  const [cat,        setCat]        = useState<string>(item?.category ?? 'item')
+  const [hrsIX,      setHrsIX]      = useState(item?.hrs.IX ?? durationOptions[2]?.hrs ?? 4)
+  const [hrsOX,      setHrsOX]      = useState(item?.hrs.OX ?? durationOptions[2]?.hrs ?? 4)
+  const [hrsUX,      setHrsUX]      = useState(item?.hrs.UX ?? durationOptions[2]?.hrs ?? 4)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatColor,setNewCatColor]= useState(CAT_PALETTE[0])
+  const [showNewCat, setShowNewCat] = useState(false)
+
+  const isEdit = !!item
+  const canSave = name.trim().length > 0
+
+  function handleSave() {
+    if (!canSave) return
+    onSave(name.trim(), cat, { IX: hrsIX, OX: hrsOX, UX: hrsUX })
+    onClose()
+  }
+
+  function handleAddCat() {
+    if (!newCatName.trim()) return
+    const id = newCatName.trim().toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
+    const newCat: CategoryDef = { id, label: newCatName.trim(), color: newCatColor }
+    onAddCategory(newCat)
+    setCat(id)
+    setNewCatName('')
+    setShowNewCat(false)
+  }
+
+  const sectionLbl = 'text-[#6e7681] text-[10px] font-semibold uppercase tracking-widest mb-2'
+  const selectCls  = 'w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-[8px] text-white text-sm outline-none focus:border-[#28a745] cursor-pointer'
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-[#0d1117] flex flex-col">
+      {/* Header */}
+      <div className="flex items-center px-4 py-3 border-b border-[#30363d] shrink-0">
+        <button onClick={onClose} className="px-3 py-1 text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors">← Cancel</button>
+        <span className="flex-1 text-center text-white font-bold text-lg">{isEdit ? 'Edit Item' : 'New Item'}</span>
+        <button
+          onClick={handleSave}
+          disabled={!canSave}
+          className="px-4 py-1 text-sm font-bold text-white bg-[#28a745] border-0 rounded cursor-pointer hover:bg-[#2ea043] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >Save</button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-4 py-5 flex flex-col gap-5 max-w-lg mx-auto w-full">
+
+          {/* Name */}
+          <div>
+            <div className={sectionLbl}>Item Name</div>
+            <input
+              autoFocus
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && canSave) handleSave() }}
+              placeholder="e.g. Chicken Wings"
+              className="w-full bg-[#161b22] border border-[#30363d] rounded-lg px-4 py-3 text-white text-base placeholder:text-[#484f58] outline-none focus:border-[#28a745]"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <div className={sectionLbl}>Category</div>
+            <div className="flex gap-2 flex-wrap">
+              {categories.map(c => {
+                const active = cat === c.id
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setCat(c.id)}
+                    style={{
+                      borderColor: c.color,
+                      color: active ? '#fff' : c.color,
+                      backgroundColor: active ? c.color + '33' : 'transparent',
+                    }}
+                    className="px-4 py-2 rounded-lg border-2 text-sm font-bold cursor-pointer transition-colors"
+                  >{c.label}</button>
+                )
+              })}
+            </div>
+
+            {/* New category form */}
+            {!showNewCat ? (
+              <button
+                onClick={() => setShowNewCat(true)}
+                className="mt-3 text-[11px] font-semibold text-[#6e7681] hover:text-[#adbac7] bg-transparent border-0 cursor-pointer transition-colors px-0 underline underline-offset-2"
+              >+ Add category</button>
+            ) : (
+              <div className="mt-3 flex flex-col gap-2 p-3 bg-[#161b22] border border-[#30363d] rounded-lg">
+                <input
+                  autoFocus
+                  value={newCatName}
+                  onChange={e => setNewCatName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddCat(); if (e.key === 'Escape') setShowNewCat(false) }}
+                  placeholder="Category name"
+                  className="w-full bg-[#0d1117] border border-[#30363d] rounded px-3 py-2 text-white text-sm placeholder:text-[#484f58] outline-none focus:border-[#28a745]"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-[#6e7681] text-xs shrink-0">Color</span>
+                  <div className="flex gap-[6px] flex-wrap">
+                    {CAT_PALETTE.map(color => (
+                      <button
+                        key={color}
+                        onClick={() => setNewCatColor(color)}
+                        style={{
+                          backgroundColor: color,
+                          outline: newCatColor === color ? '2px solid #fff' : '2px solid transparent',
+                          outlineOffset: '2px',
+                        }}
+                        className="w-5 h-5 rounded-full border-0 cursor-pointer transition-all shrink-0"
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddCat}
+                    disabled={!newCatName.trim()}
+                    className="flex-1 py-[6px] text-xs font-bold text-white bg-[#28a745] hover:bg-[#2ea043] border-0 rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >Add</button>
+                  <button
+                    onClick={() => { setShowNewCat(false); setNewCatName('') }}
+                    className="px-3 py-[6px] text-xs font-bold text-[#6e7681] hover:text-white bg-transparent border border-[#30363d] hover:border-[#6e7681] rounded cursor-pointer transition-colors"
+                  >Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Expiry times */}
+          <div>
+            <div className={sectionLbl}>Expiry Times</div>
+            <div className="grid grid-cols-3 gap-3">
+              {([['IX', hrsIX, setHrsIX], ['OX', hrsOX, setHrsOX], ['UX', hrsUX, setHrsUX]] as const).map(([lbl, val, set]) => (
+                <div key={lbl} className="flex flex-col gap-[6px]">
+                  <span className="text-[#adbac7] text-xs text-center font-semibold uppercase tracking-wide">{lbl}</span>
+                  <select value={val} onChange={e => set(Number(e.target.value))} className={selectCls}>
+                    {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, durationOptions, collapsed, onToggleCollapse }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
-  const [name,          setName]          = useState('')
-  const [hrsIX,         setHrsIX]         = useState(durationOptions[2]?.hrs ?? 4)
-  const [hrsOX,         setHrsOX]         = useState(durationOptions[2]?.hrs ?? 4)
-  const [hrsUX,         setHrsUX]         = useState(durationOptions[2]?.hrs ?? 4)
-  const [tab,           setTab]           = useState<'items' | 'recent'>('items')
+  const [userCats,      setUserCats]      = useState<CategoryDef[]>(() => loadUserCats())
+  const [tab,           setTab]           = useState<'items' | 'bundles' | 'recent'>('items')
+  const [sortField,     setSortField]     = useState<SortField>('name')
+  const [sortAsc,       setSortAsc]       = useState(true)
+  const [filterCats,    setFilterCats]    = useState<Set<string>>(new Set())
   const [recentJobs,    setRecentJobs]    = useState<PrintJob[]>([])
   const [recentLoading, setRecentLoading] = useState(false)
   const [showAddBundle, setShowAddBundle] = useState(false)
-
-  useEffect(() => {
-    const first = durationOptions[0]?.hrs ?? 4
-    const valid = (h: number) => durationOptions.some(o => o.hrs === h) ? h : first
-    setHrsIX(valid)
-    setHrsOX(valid)
-    setHrsUX(valid)
-  }, [durationOptions])
+  const [showAddItem,   setShowAddItem]   = useState(false)
+  const [editingItem,   setEditingItem]   = useState<QuickSingleItem | null>(null)
 
   useEffect(() => {
     if (tab !== 'recent') return
@@ -437,13 +627,54 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
       .finally(() => setRecentLoading(false))
   }, [tab])
 
-  function addItem() {
-    if (!name.trim()) return
+  const allCats     = [...ITEM_CATEGORIES, ...userCats]
+  const singleItems = items.filter((i): i is QuickSingleItem => i.type === 'item')
+  const bundleItems = items.filter(i => i.type === 'bundle')
+
+  const visibleItems = (() => {
+    const list = filterCats.size > 0 ? singleItems.filter(i => filterCats.has(i.category ?? 'item')) : singleItems
+    return [...list].sort((a, b) => {
+      let cmp = 0
+      if (sortField === 'name') {
+        cmp = a.name.localeCompare(b.name)
+      } else if (sortField === 'cat') {
+        const order: string[] = ITEM_CATEGORIES.map(c => c.id)
+        const ai = order.indexOf(a.category ?? 'item')
+        const bi = order.indexOf(b.category ?? 'item')
+        cmp = ai !== bi ? ai - bi : a.name.localeCompare(b.name)
+      } else {
+        // recent: sort by timestamp embedded in id (higher = newer)
+        const aTime = parseInt(a.id.split('-')[0], 10)
+        const bTime = parseInt(b.id.split('-')[0], 10)
+        cmp = aTime - bTime
+      }
+      return sortAsc ? cmp : -cmp
+    })
+  })()
+
+  function addCategory(cat: CategoryDef) {
+    const next = [...userCats, cat]
+    setUserCats(next)
+    persist(CATS_KEY, next)
+  }
+
+  function addItem(name: string, cat: string, hrs: TemplateHrs) {
     const id   = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const next: QuickListEntry[] = [...items, { id, name: name.trim(), type: 'item', hrs: { IX: hrsIX, OX: hrsOX, UX: hrsUX } }]
+    const next: QuickListEntry[] = [...items, { id, name, type: 'item', hrs, category: cat }]
     setItems(next)
     persist(ITEMS_KEY, next)
-    setName('')
+  }
+
+  function saveEditItem(name: string, cat: string, hrs: TemplateHrs) {
+    if (!editingItem) return
+    const next = items.map(i =>
+      i.id === editingItem.id && i.type === 'item'
+        ? { ...i, name, category: cat, hrs }
+        : i
+    )
+    setItems(next)
+    persist(ITEMS_KEY, next)
+    setEditingItem(null)
   }
 
   function addBundle(bundleName: string, entries: BundleEntry[]) {
@@ -480,7 +711,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
           <span className={classes.panelTitle}>Quick Items</span>
           <div className="flex items-center gap-2">
             <span className={classes.panelCount}>
-              {items.length} item{items.length !== 1 ? 's' : ''}
+              {singleItems.length} item{singleItems.length !== 1 ? 's' : ''}{bundleItems.length > 0 ? ` · ${bundleItems.length} bundle${bundleItems.length !== 1 ? 's' : ''}` : ''}
             </span>
             <button
               onClick={onToggleCollapse}
@@ -492,42 +723,78 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
 
         {/* Tabs */}
         <div className={classes.panelTabBar}>
-          <button className={classes.panelTab(tab === 'items')}  onClick={() => setTab('items')}>Items</button>
-          <button className={classes.panelTab(tab === 'recent')} onClick={() => setTab('recent')}>Recent</button>
+          <button className={classes.panelTab(tab === 'items')}   onClick={() => setTab('items')}>Items</button>
+          <button className={classes.panelTab(tab === 'bundles')} onClick={() => setTab('bundles')}>Bundles</button>
+          <button className={classes.panelTab(tab === 'recent')}  onClick={() => setTab('recent')}>Recent</button>
         </div>
 
         {/* ── Items tab ── */}
         {tab === 'items' && (
           <>
+            {/* Filter + sort controls */}
+            <div className="shrink-0 border-b border-[#30363d]">
+              {/* Category filter pills — multi-select */}
+              <div className={classes.filterBar} style={{ paddingBottom: '6px' }}>
+                <button
+                  className={classes.filterPill(filterCats.size === 0)}
+                  onClick={() => setFilterCats(new Set())}
+                >All</button>
+                {allCats.map(cat => {
+                  const active = filterCats.has(cat.id)
+                  return (
+                    <button
+                      key={cat.id}
+                      className={classes.filterPill(active)}
+                      style={active ? {} : { borderColor: cat.color + '55', color: cat.color }}
+                      onClick={() => setFilterCats(prev => {
+                        const next = new Set(prev)
+                        if (next.has(cat.id)) next.delete(cat.id)
+                        else next.add(cat.id)
+                        return next
+                      })}
+                    >{cat.label}</button>
+                  )
+                })}
+              </div>
+              {/* Sort by row */}
+              <div className="flex items-center gap-2 px-3 pb-2">
+                <span className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-wide shrink-0">Sort by</span>
+                <select
+                  value={sortField}
+                  onChange={e => { const f = e.target.value as SortField; setSortField(f); setSortAsc(f !== 'recent') }}
+                  className="flex-1 bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
+                >
+                  <option value="name">Name</option>
+                  <option value="cat">Category</option>
+                  <option value="recent">Recently Added</option>
+                </select>
+                <button
+                  onClick={() => setSortAsc(prev => !prev)}
+                  title={sortAsc ? 'Ascending — click to reverse' : 'Descending — click to reverse'}
+                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-[#30363d] bg-transparent text-[#adbac7] hover:text-white hover:border-[#6e7681] cursor-pointer transition-colors text-sm font-bold"
+                >{sortAsc ? '↑' : '↓'}</button>
+              </div>
+            </div>
+
             <div className={classes.panelList}>
-              {items.length === 0 ? (
+              {visibleItems.length === 0 ? (
                 <div className={classes.emptyState}>
-                  <span className="text-white font-medium">No items yet</span>
-                  <span>Add commonly prepped items below to print their labels in one tap</span>
+                  <span className="text-white font-medium">{singleItems.length === 0 ? 'No items yet' : 'No items match filter'}</span>
+                  <span>{singleItems.length === 0 ? 'Use the button below to add your first item' : 'Try a different category filter'}</span>
                 </div>
               ) : (
-                items.map(item => {
-                  if (item.type === 'bundle') {
-                    const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                    const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
-                    return (
-                      <div key={item.id} className={classes.itemRow}>
-                        <div className={classes.itemInfo}>
-                          <div className="flex items-center">
-                            <span className={classes.bundleBadge}>BUNDLE</span>
-                            <span className={`${classes.itemName} flex-1`}>{item.name}</span>
-                          </div>
-                          <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
-                        </div>
-                        <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
-                        <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
-                      </div>
-                    )
-                  }
+                visibleItems.map(item => {
+                  const cat = getCat(item.category ?? 'item', userCats)
                   return (
                     <div key={item.id} className={classes.itemRow}>
                       <div className={classes.itemInfo}>
-                        <div className={classes.itemName}>{item.name}</div>
+                        <div className="flex items-center">
+                          <span
+                            className={classes.catBadge}
+                            style={{ color: cat.color, borderColor: cat.color + '66' }}
+                          >{cat.label}</span>
+                          <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+                        </div>
                         <div className={classes.itemDur}>
                           IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
                         </div>
@@ -535,6 +802,7 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
                       <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.itemBtn(false)}>×1</button>
                       <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(false)}>×5</button>
                       <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
+                      <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
                     </div>
                   )
@@ -542,34 +810,51 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
               )}
             </div>
 
-            {/* Add form */}
+            {/* Add Item button — bottom right */}
+            <div className="shrink-0 flex justify-end px-3 py-2 border-t border-[#30363d]">
+              <button
+                onClick={() => setShowAddItem(true)}
+                className="px-4 py-[7px] text-sm font-bold text-white bg-[#28a745] hover:bg-[#2ea043] border-0 rounded-lg cursor-pointer transition-colors"
+              >+ Add Item</button>
+            </div>
+          </>
+        )}
+
+        {/* ── Bundles tab ── */}
+        {tab === 'bundles' && (
+          <>
+            <div className={classes.panelList}>
+              {bundleItems.length === 0 ? (
+                <div className={classes.emptyState}>
+                  <span className="text-white font-medium">No bundles yet</span>
+                  <span>Bundles let you print multiple labels at once for a full prep session</span>
+                </div>
+              ) : (
+                bundleItems.map(item => {
+                  if (item.type !== 'bundle') return null
+                  const total   = item.entries.reduce((s, e) => s + e.qty, 0)
+                  const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
+                  return (
+                    <div key={item.id} className={classes.itemRow}>
+                      <div className={classes.itemInfo}>
+                        <div className="flex items-center">
+                          <span className={classes.bundleBadge}>BUNDLE</span>
+                          <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+                        </div>
+                        <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
+                      </div>
+                      <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
+                      <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
             <div className={classes.addForm}>
-              <div className={classes.addLabel}>Add to Quick List</div>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addItem() }}
-                placeholder="e.g. Chicken Wings"
-                className={classes.addInput}
-              />
-              <div className="grid grid-cols-3 gap-1">
-                {([['IX', hrsIX, setHrsIX], ['OX', hrsOX, setHrsOX], ['UX', hrsUX, setHrsUX]] as const).map(([lbl, val, set]) => (
-                  <div key={lbl} className="flex flex-col gap-[3px]">
-                    <span className="text-[#6e7681] text-[9px] text-center font-semibold uppercase tracking-wide">{lbl}</span>
-                    <select value={val} onChange={e => set(Number(e.target.value))} className={classes.addSelect}>
-                      {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={addItem} disabled={!name.trim()} className={classes.addBtn}>
-                  + Add Item
-                </button>
-                <button onClick={() => setShowAddBundle(true)} className={classes.addBundleBtn}>
-                  + Bundle
-                </button>
-              </div>
+              <button onClick={() => setShowAddBundle(true)} className={classes.addBtn}>
+                + New Bundle
+              </button>
             </div>
           </>
         )}
@@ -603,9 +888,28 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
         )}
       </div>
 
+      {showAddItem && (
+        <AddEditItemPage
+          categories={allCats}
+          durationOptions={durationOptions}
+          onSave={addItem}
+          onAddCategory={addCategory}
+          onClose={() => setShowAddItem(false)}
+        />
+      )}
+      {editingItem && (
+        <AddEditItemPage
+          item={editingItem}
+          categories={allCats}
+          durationOptions={durationOptions}
+          onSave={saveEditItem}
+          onAddCategory={addCategory}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
       {showAddBundle && (
         <AddBundlePage
-          quickItems={items.filter((i): i is QuickSingleItem => i.type === 'item')}
+          quickItems={singleItems}
           durationOptions={durationOptions}
           onAdd={addBundle}
           onClose={() => setShowAddBundle(false)}
@@ -615,7 +919,15 @@ function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, dura
   )
 }
 
-// ── Trash icon SVG ──────────────────────────────────────────────────────────
+// ── Icon SVGs ────────────────────────────────────────────────────────────────
+function PencilIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+    </svg>
+  )
+}
+
 function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

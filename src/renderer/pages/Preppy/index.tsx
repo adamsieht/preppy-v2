@@ -15,7 +15,6 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import PageLayout from '../../components/PageLayout'
-import AutoDismissAlert from '../../components/AutoDismissAlert'
 import Label from '../../components/Label'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
 
@@ -516,11 +515,80 @@ function PrintQtyPage({ durationHrs, label, template, onPrint, onClose }: PrintQ
   )
 }
 
+// ── Print toast (bottom overlay) ────────────────────────────────────────────
+interface PrintJobState {
+  qty:       number
+  done:      number
+  state:     'printing' | 'success' | 'error'
+  errorMsg?: string
+}
+
+function PrintToast({ qty, done, state, errorMsg, onDismiss }: PrintJobState & { onDismiss: () => void }) {
+  const onDismissRef = useRef(onDismiss)
+  onDismissRef.current = onDismiss
+
+  useEffect(() => {
+    if (state !== 'success') return
+    const t = setTimeout(() => onDismissRef.current(), 2500)
+    return () => clearTimeout(t)
+  }, [state])
+
+  const pct = qty > 0 ? Math.round((done / qty) * 100) : 0
+
+  if (state === 'success') {
+    return (
+      <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up" onClick={onDismiss}>
+        <div className="bg-[#1a4731] border border-[#2ea043] rounded-xl px-5 py-4 flex items-center gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.6)] cursor-pointer">
+          <span className="text-[#3fb950] text-xl leading-none">✓</span>
+          <span className="text-[#3fb950] font-bold text-base">
+            {qty === 1 ? '1 label printed' : `${qty} labels printed`}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up">
+        <div className="bg-[#3d1a1a] border border-[#f85149] rounded-xl px-5 py-4 flex items-center gap-3 shadow-[0_8px_32px_rgba(0,0,0,0.6)]">
+          <span className="text-[#f85149] text-xl leading-none">✗</span>
+          <span className="text-[#ff7b72] font-medium text-base flex-1 min-w-0 truncate">{errorMsg ?? 'Print failed'}</span>
+          <button onClick={onDismiss} className="shrink-0 text-[#f85149]/70 hover:text-[#f85149] text-2xl leading-none cursor-pointer bg-transparent border-0">×</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed bottom-4 inset-x-4 z-[250] animate-slide-up">
+      <div className="bg-[#161b22] border border-[#30363d] rounded-xl px-5 py-4 shadow-[0_8px_32px_rgba(0,0,0,0.6)] flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[#adbac7] text-lg leading-none">🖨</span>
+          <span className="text-white font-bold text-base flex-1">
+            Printing{' '}
+            <span className="text-[#3fb950] tabular-nums">{done}</span>
+            <span className="text-[#6e7681]"> / {qty}</span>
+          </span>
+        </div>
+        <div className="h-[5px] bg-[#30363d] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#28a745] rounded-full transition-[width] duration-300 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 // ── Main page ───────────────────────────────────────────────────────────────
 export default function Preppy() {
   const [template,      setTemplate]      = useState<LabelTemplate>('IX')
-  const [status,        setStatus]        = useState<{ ok: boolean; msg: string } | null>(null)
-  const [printing,      setPrinting]      = useState(false)
+  const [printJob,      setPrintJob]      = useState<PrintJobState | null>(null)
+  const printIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const printing = printJob?.state === 'printing'
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadStored(PRESETS_KEY))
   const [presetOrder,   setPresetOrder]   = useState<string[]>(() => loadStored(PRESET_ORDER_KEY))
   const [hiddenPresets, setHiddenPresets] = useState<string[]>(() => loadStored(HIDDEN_PRESETS_KEY))
@@ -686,18 +754,38 @@ export default function Preppy() {
 
   // ── Print handlers ────────────────────────────────────────────────────────
   async function handlePrint(durationHrs: number, qty: number) {
-    setPrinting(true)
+    if (printIntervalRef.current) {
+      clearInterval(printIntervalRef.current)
+      printIntervalRef.current = null
+    }
+
+    setPrintJob({ qty, done: 1, state: 'printing' })
+
+    if (qty > 1) {
+      const msPerLabel = Math.max(80, Math.min(600, 2400 / qty))
+      let count = 1
+      printIntervalRef.current = setInterval(() => {
+        count += 1
+        if (count >= qty) {
+          clearInterval(printIntervalRef.current!)
+          printIntervalRef.current = null
+          return
+        }
+        setPrintJob(prev => prev?.state === 'printing' ? { ...prev, done: count } : prev)
+      }, msPerLabel)
+    }
+
     try {
       const result = await window.electronAPI.print({ template, durationHrs, qty })
-      setStatus(result.success
-        ? { ok: true, msg: result.simulated
-            ? `Simulated ×${qty} → ${result.simulatedPath ?? 'simulated-labels/'}`
-            : `Printed ×${qty}` }
-        : { ok: false, msg: result.error ?? 'Print failed' })
+      if (printIntervalRef.current) { clearInterval(printIntervalRef.current); printIntervalRef.current = null }
+      if (result.success) {
+        setPrintJob({ qty, done: qty, state: 'success' })
+      } else {
+        setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: result.error ?? 'Print failed' } : null)
+      }
     } catch (err) {
-      setStatus({ ok: false, msg: errorMsg(err, 'Print failed') })
-    } finally {
-      setPrinting(false)
+      if (printIntervalRef.current) { clearInterval(printIntervalRef.current); printIntervalRef.current = null }
+      setPrintJob(prev => prev ? { ...prev, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : null)
     }
   }
 
@@ -718,16 +806,6 @@ export default function Preppy() {
               : { width: leftWidth, flexShrink: 0, flexGrow: 0 }
             : undefined}
         >
-          {status && (
-            <div className={classes.alertWrap}>
-              <AutoDismissAlert
-                variant={status.ok ? 'success' : 'danger'}
-                msg={status.msg}
-                onDismiss={() => setStatus(null)}
-              />
-            </div>
-          )}
-
           {/* IX / OX / UX tabs + optional "+ New" + Edit/Done */}
           <div className={classes.selector}>
             {TEMPLATES.map((id) => (
@@ -854,6 +932,17 @@ export default function Preppy() {
           template={template}
           onAdd={addCustomPreset}
           onClose={() => setShowAddPreset(false)}
+        />
+      )}
+
+      {/* ── Print toast ── */}
+      {printJob && (
+        <PrintToast
+          qty={printJob.qty}
+          done={printJob.done}
+          state={printJob.state}
+          errorMsg={printJob.errorMsg}
+          onDismiss={() => setPrintJob(null)}
         />
       )}
     </PageLayout>

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import Label from '../../../components/Label'
-import type { LabelTemplate } from '../types'
-import { NUMPAD_KEYS } from '../constants'
+import Label from '../../components/Label'
+import type { LabelTemplate } from '../Preppy/types'
+import { NUMPAD_KEYS } from '../Preppy/constants'
 
 interface AddPresetPageProps {
   template: LabelTemplate

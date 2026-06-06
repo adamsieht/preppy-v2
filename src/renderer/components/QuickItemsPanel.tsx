@@ -3,8 +3,8 @@ import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJo
 import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY } from '../pages/Preppy/constants'
 import { loadItems, loadUserCats, persist, fmtDuration, timeAgo, getCat } from '../pages/Preppy/utils'
 import { PencilIcon } from './Icons'
-import AddEditItemPage from '../pages/Preppy/AddEditItemPage'
-import AddBundlePage from '../pages/Preppy/AddBundlePage'
+import AddEditItemPage from '../pages/AddEditItemPage'
+import AddBundlePage from '../pages/AddBundlePage'
 import { classes } from './QuickItemsPanel.styles'
 
 type SortField = 'name' | 'cat' | 'recent'

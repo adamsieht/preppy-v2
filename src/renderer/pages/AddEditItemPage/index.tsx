@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { QuickSingleItem, TemplateHrs, CategoryDef } from '../types'
-import { CAT_PALETTE } from '../constants'
+import type { QuickSingleItem, TemplateHrs, CategoryDef } from '../Preppy/types'
+import { CAT_PALETTE } from '../Preppy/constants'
 import { styles } from './styles'
 
 interface AddEditItemPageProps {

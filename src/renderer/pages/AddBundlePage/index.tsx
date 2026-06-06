@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { QuickSingleItem, BundleEntry } from '../types'
-import { fmtDuration } from '../utils'
+import type { QuickSingleItem, BundleEntry } from '../Preppy/types'
+import { fmtDuration } from '../Preppy/utils'
 import { styles } from './styles'
 
 interface AddBundlePageProps {

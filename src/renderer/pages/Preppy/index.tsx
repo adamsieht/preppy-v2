@@ -686,7 +686,7 @@ export default function Preppy() {
   }
 
   return (
-    <PageLayout title="Print Labels" back noPad>
+    <PageLayout title="Print Labels" noPad>
       <div className={classes.page}>
 
         {/* ── Left: template selector + preset cards ── */}

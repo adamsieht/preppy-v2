@@ -7,6 +7,7 @@ app.commandLine.appendSwitch('disable-gpu')
 app.commandLine.appendSwitch('disable-software-rasterizer')
 app.commandLine.appendSwitch('disable-gpu-compositing')
 import { registerPrinterHandlers } from './ipc/handlers/printer.handler'
+import { registerPrinterSetupHandlers } from './ipc/handlers/printer-setup.handler'
 import { registerSensorHandlers } from './ipc/handlers/sensor.handler'
 import { registerWifiHandlers } from './ipc/handlers/wifi.handler'
 import { registerDbHandlers } from './ipc/handlers/db.handler'
@@ -40,6 +41,7 @@ app.whenReady().then(() => {
   logInfo('Preppy v2 starting up')
 
   registerPrinterHandlers()
+  registerPrinterSetupHandlers()
   registerSensorHandlers()
   registerWifiHandlers()
   registerDbHandlers()

@@ -1,7 +1,10 @@
 export const IPC = {
-  PRINTER_PRINT: 'printer:print',
-  PRINTER_PREVIEW: 'printer:preview',
-  PRINTER_HISTORY: 'printer:history',
+  PRINTER_PRINT:      'printer:print',
+  PRINTER_PREVIEW:    'printer:preview',
+  PRINTER_HISTORY:    'printer:history',
+  PRINTER_SCAN:       'printer:scan',
+  PRINTER_SET_DEVICE: 'printer:set-device',
+  PRINTER_TEST:       'printer:test',
   SENSOR_UPDATE: 'sensor:update',
   SENSOR_LIST: 'sensor:list',
   WIFI_SAVE: 'wifi:save',

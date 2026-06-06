@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../main/ipc/channels'
 import type { PrintArgs, LabelTemplate, PreviewResult } from '../main/services/printer.service'
 import type { Sensor, SensorLog, PrintJob, WifiCredentials, DurationCount } from '../main/services/db.service'
+import type { UsbPrinterDevice } from '../main/services/usb-detection.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
 
 export interface ElectronAPI {
@@ -20,6 +21,9 @@ export interface ElectronAPI {
   getTempReport: (mac?: string, limit?: number) => Promise<SensorLog[]>
   getDebugInfo: () => Promise<unknown>
   sendRawZpl: (zpl: string) => Promise<{ success: boolean; error?: string }>
+  scanPrinters: () => Promise<UsbPrinterDevice[]>
+  setPrinterDevice: (path: string) => Promise<{ success: boolean; device?: string; error?: string }>
+  testPrinter: (path: string) => Promise<{ success: boolean; error?: string }>
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -62,4 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDebugInfo: () => ipcRenderer.invoke(IPC.DEBUG_INFO),
 
   sendRawZpl: (zpl: string) => ipcRenderer.invoke(IPC.DEBUG_SEND_ZPL, zpl),
+
+  scanPrinters:     ()       => ipcRenderer.invoke(IPC.PRINTER_SCAN),
+  setPrinterDevice: (p: string) => ipcRenderer.invoke(IPC.PRINTER_SET_DEVICE, p),
+  testPrinter:      (p: string) => ipcRenderer.invoke(IPC.PRINTER_TEST, p),
 } satisfies ElectronAPI)

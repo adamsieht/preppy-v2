@@ -2,11 +2,12 @@ import React, { Suspense } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
 
-const Preppy  = React.lazy(() => import('./pages/Preppy'))
-const PrintX  = React.lazy(() => import('./pages/PrintX'))
-const WiFi    = React.lazy(() => import('./pages/WiFi'))
-const Reports = React.lazy(() => import('./pages/Reports'))
-const Debug   = React.lazy(() => import('./pages/Debug'))
+const Preppy        = React.lazy(() => import('./pages/Preppy'))
+const PrintX        = React.lazy(() => import('./pages/PrintX'))
+const WiFi          = React.lazy(() => import('./pages/WiFi'))
+const Reports       = React.lazy(() => import('./pages/Reports'))
+const Debug         = React.lazy(() => import('./pages/Debug'))
+const PrinterSetup  = React.lazy(() => import('./pages/PrinterSetup'))
 
 export default function App() {
   return (
@@ -17,7 +18,8 @@ export default function App() {
           <Route path="/printx"  element={<PrintX />}  />
           <Route path="/wifi"    element={<WiFi />}    />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/debug"   element={<Debug />}   />
+          <Route path="/debug"          element={<Debug />}         />
+          <Route path="/printer-setup" element={<PrinterSetup />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

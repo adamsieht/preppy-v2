@@ -74,3 +74,13 @@ export function getConfig(): AppConfig {
 
   return _config
 }
+
+/** Persist a new printer device path to config.local.json and invalidate the cache. */
+export function setPrinterDevice(device: string): void {
+  const localPath = path.join(app.getPath('userData'), 'config.local.json')
+  let local: Partial<AppConfig> = {}
+  try { local = JSON.parse(fs.readFileSync(localPath, 'utf-8')) } catch { /* no local file yet */ }
+  const updated = deepMerge(local as AppConfig, { printer: { device } } as Partial<AppConfig>)
+  fs.writeFileSync(localPath, JSON.stringify(updated, null, 2), 'utf-8')
+  _config = null   // force re-read on next getConfig()
+}

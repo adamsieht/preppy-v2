@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs } from '../pages/Preppy/types'
-import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY } from '../pages/Preppy/constants'
-import { loadItems, loadUserCats, persist, fmtDuration, timeAgo, getCat } from '../pages/Preppy/utils'
+import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs, ActiveLogEntry } from '../pages/Preppy/types'
+import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY } from '../pages/Preppy/constants'
+import { loadItems, loadStored, loadUserCats, persist, fmtDuration, fmtExpiry, timeAgo, getCat } from '../pages/Preppy/utils'
 import { PencilIcon } from './Icons'
 import AddEditItemPage from '../pages/AddEditItemPage'
 import AddBundlePage from '../pages/AddBundlePage'
@@ -26,8 +26,10 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
   const [sortField,     setSortField]     = useState<SortField>('name')
   const [sortAsc,       setSortAsc]       = useState(true)
   const [filterCats,    setFilterCats]    = useState<Set<string>>(new Set())
-  const [recentJobs,    setRecentJobs]    = useState<PrintJob[]>([])
-  const [recentLoading, setRecentLoading] = useState(false)
+  const [recentJobs,      setRecentJobs]      = useState<PrintJob[]>([])
+  const [recentLoading,   setRecentLoading]   = useState(false)
+  const [activeLog,       setActiveLog]       = useState<ActiveLogEntry[]>(() => loadStored(ACTIVE_LOG_KEY))
+  const [recentClearedAt, setRecentClearedAt] = useState<string>(() => localStorage.getItem(RECENT_CLEARED_KEY) ?? '')
   const [showAddBundle, setShowAddBundle] = useState(false)
   const [showAddItem,   setShowAddItem]   = useState(false)
   const [editingItem,   setEditingItem]   = useState<QuickSingleItem | null>(null)
@@ -117,6 +119,45 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     setItems(next)
     persist(ITEMS_KEY, next)
   }
+
+  function logActive(name: string | undefined, tpl: LabelTemplate, duration_hrs: number, qty: number) {
+    const entry: ActiveLogEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name, template: tpl, duration_hrs, qty,
+      printedAt: new Date().toISOString(),
+    }
+    setActiveLog(prev => {
+      const next = [...prev, entry]
+      persist(ACTIVE_LOG_KEY, next)
+      return next
+    })
+  }
+
+  function dismissActiveEntry(id: string) {
+    setActiveLog(prev => {
+      const next = prev.filter(e => e.id !== id)
+      persist(ACTIVE_LOG_KEY, next)
+      return next
+    })
+  }
+
+  function clearActive() {
+    setActiveLog([])
+    persist(ACTIVE_LOG_KEY, [])
+  }
+
+  function clearHistory() {
+    const ts = new Date().toISOString()
+    setRecentClearedAt(ts)
+    localStorage.setItem(RECENT_CLEARED_KEY, ts)
+  }
+
+  const now         = new Date()
+  const endOfDay    = new Date(); endOfDay.setHours(23, 59, 59, 999)
+  const undismissed    = activeLog.filter(e => !e.dismissed)
+  const expiringToday  = undismissed.filter(e => { const x = new Date(new Date(e.printedAt).getTime() + e.duration_hrs * 3600 * 1000); return x > now && x <= endOfDay })
+  const currentlyActive = undismissed.filter(e => { const x = new Date(new Date(e.printedAt).getTime() + e.duration_hrs * 3600 * 1000); return x > endOfDay })
+  const filteredHistory = recentClearedAt ? recentJobs.filter(j => j.printed_at > recentClearedAt) : recentJobs
 
   // Collapsed: render a narrow strip with an expand button
   if (collapsed) {
@@ -230,8 +271,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                         IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
                       </div>
                       <div className={classes.gridCardBtns}>
-                        <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.gridCardBtn(false)}>×1</button>
-                        <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.gridCardBtn(false)}>×5</button>
+                        <button onClick={() => { logActive(item.name, template, item.hrs[template], 1); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
+                        <button onClick={() => { logActive(item.name, template, item.hrs[template], 5); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
                         <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
                       </div>
                     </div>
@@ -257,8 +298,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                           IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
                         </div>
                       </div>
-                      <button onClick={() => onPrint(item.hrs[template], 1)} className={classes.itemBtn(false)}>×1</button>
-                      <button onClick={() => onPrint(item.hrs[template], 5)} className={classes.itemBtn(false)}>×5</button>
+                      <button onClick={() => { logActive(item.name, template, item.hrs[template], 1); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
+                      <button onClick={() => { logActive(item.name, template, item.hrs[template], 5); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
                       <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
                       <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>
                       <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>
@@ -320,25 +361,79 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
         {/* ── Recent tab ── */}
         {tab === 'recent' && (
           <div className={classes.panelList}>
+
+            {/* Expiring Today */}
+            {expiringToday.length > 0 && (
+              <>
+                <div className="px-3 pt-3 pb-1 text-[10px] font-bold text-[#e3b341] uppercase tracking-wider">⚠ Expiring Today</div>
+                {expiringToday.map(entry => (
+                  <div key={entry.id} className="flex items-center gap-2 px-3 py-[10px] border-b border-[#30363d] hover:bg-[#161b22] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{entry.name ?? fmtDuration(entry.duration_hrs)}</div>
+                      <div className="text-[#6e7681] text-xs mt-[1px]">×{entry.qty} · {entry.template} · {timeAgo(entry.printedAt)} → exp {fmtExpiry(entry.printedAt, entry.duration_hrs)}</div>
+                    </div>
+                    <button onClick={() => dismissActiveEntry(entry.id)} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] transition-colors text-base leading-none">✕</button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Currently Active */}
+            {currentlyActive.length > 0 && (
+              <>
+                <div className="px-3 pt-3 pb-1 text-[10px] font-bold text-[#3fb950] uppercase tracking-wider">● Active</div>
+                {currentlyActive.map(entry => (
+                  <div key={entry.id} className="flex items-center gap-2 px-3 py-[10px] border-b border-[#30363d] hover:bg-[#161b22] transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{entry.name ?? fmtDuration(entry.duration_hrs)}</div>
+                      <div className="text-[#6e7681] text-xs mt-[1px]">×{entry.qty} · {entry.template} · {timeAgo(entry.printedAt)} → exp {fmtExpiry(entry.printedAt, entry.duration_hrs)}</div>
+                    </div>
+                    <button onClick={() => dismissActiveEntry(entry.id)} className="shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] transition-colors text-base leading-none">✕</button>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* Clear Active button */}
+            {(expiringToday.length > 0 || currentlyActive.length > 0) && (
+              <div className="px-3 py-2 flex justify-end border-b border-[#30363d]">
+                <button onClick={clearActive} className="px-3 py-1 text-xs font-bold text-[#6e7681] hover:text-[#f85149] bg-transparent border border-[#30363d] hover:border-[#f85149] rounded cursor-pointer transition-colors">
+                  Clear Active
+                </button>
+              </div>
+            )}
+
+            {/* Print History header */}
+            {!recentLoading && (
+              <div className="flex items-center justify-between px-3 pt-3 pb-1">
+                <span className="text-[10px] font-bold text-[#6e7681] uppercase tracking-wider">Print History</span>
+                {filteredHistory.length > 0 && (
+                  <button onClick={clearHistory} className="text-[10px] font-semibold text-[#6e7681] hover:text-[#f85149] cursor-pointer bg-transparent border-0 transition-colors">
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Print History content */}
             {recentLoading ? (
-              <div className="flex items-center justify-center h-full text-[#6e7681] text-sm">Loading…</div>
-            ) : recentJobs.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-[#6e7681] text-sm">Loading…</div>
+            ) : filteredHistory.length === 0 && expiringToday.length === 0 && currentlyActive.length === 0 ? (
               <div className={classes.emptyState}>
                 <span className="text-white font-medium">No print history</span>
                 <span>Successful print jobs will appear here</span>
               </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="text-[#6e7681] text-xs text-center py-3 px-3">No history yet</div>
             ) : (
-              recentJobs.map((job, i) => (
+              filteredHistory.map((job, i) => (
                 <div key={i} className={classes.recentRow}>
                   <div className={classes.recentBadge}>{job.template}</div>
                   <div className={classes.recentInfo}>
                     <div className={classes.recentMain}>{fmtDuration(job.duration_hrs)} · ×{job.qty}</div>
                     <div className={classes.recentSub}>{timeAgo(job.printed_at)}</div>
                   </div>
-                  <button
-                    onClick={() => onPrint(job.duration_hrs, job.qty)}
-                    className={classes.recentBtn}
-                  >Reprint</button>
+                  <button onClick={() => onPrint(job.duration_hrs, job.qty)} className={classes.recentBtn}>Reprint</button>
                 </div>
               ))
             )}

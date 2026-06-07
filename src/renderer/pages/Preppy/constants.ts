@@ -50,5 +50,7 @@ export const PRESET_ORDER_KEY    = 'preppy-preset-order'
 export const HIDDEN_PRESETS_KEY  = 'preppy-hidden-presets'
 export const PANEL_COLLAPSED_KEY = 'preppy-panel-collapsed'
 export const LEFT_COLLAPSED_KEY  = 'preppy-left-collapsed'
+export const ACTIVE_LOG_KEY      = 'preppy-active-log'
+export const RECENT_CLEARED_KEY  = 'preppy-recent-cleared'
 
 export const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','⌫','0','✓'] as const

@@ -37,6 +37,16 @@ export interface PrintJob {
   success:      number
 }
 
+export interface ActiveLogEntry {
+  id:           string
+  name?:        string
+  template:     LabelTemplate
+  duration_hrs: number
+  qty:          number
+  printedAt:    string
+  dismissed?:   boolean
+}
+
 export interface CategoryDef {
   id:    string
   label: string

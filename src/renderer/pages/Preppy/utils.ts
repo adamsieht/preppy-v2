@@ -69,3 +69,19 @@ export function timeAgo(iso: string): string {
 export function getCat(id: string, extra: CategoryDef[] = []): CategoryDef {
   return [...extra, ...ITEM_CATEGORIES].find(c => c.id === id) ?? ITEM_CATEGORIES[0]
 }
+
+export function fmtExpiry(printedAt: string, durationHrs: number): string {
+  const exp    = new Date(new Date(printedAt).getTime() + durationHrs * 3600 * 1000)
+  const now    = new Date()
+  const diffMs = exp.getTime() - now.getTime()
+  if (diffMs <= 0) return 'expired'
+  if (diffMs < 3600000) return `${Math.ceil(diffMs / 60000)}m`
+  if (exp.toDateString() === now.toDateString()) {
+    return exp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  }
+  const tmrw = new Date(now); tmrw.setDate(tmrw.getDate() + 1)
+  if (exp.toDateString() === tmrw.toDateString()) {
+    return `tmrw ${exp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+  }
+  return `${Math.ceil(diffMs / 86400000)}d`
+}

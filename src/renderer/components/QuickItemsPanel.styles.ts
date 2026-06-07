@@ -26,7 +26,6 @@ export const classes = {
   itemEditBtn:     'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#58a6ff] leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center',
   bundleBadge:     'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold text-[#8b949e] bg-[#21262d] border border-[#30363d] mr-[5px]',
   catBadge:        'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold border mr-[5px]',
-  filterBar:       'flex flex-wrap gap-1 px-3 pt-2 pb-1 border-b border-[#30363d] shrink-0',
   filterPill:      (active: boolean) => active
     ? 'px-2 py-[3px] rounded text-[10px] font-bold cursor-pointer border border-[#28a745] bg-[#28a745] text-white transition-colors'
     : 'px-2 py-[3px] rounded text-[10px] font-bold cursor-pointer border border-[#30363d] bg-transparent text-[#6e7681] hover:text-white hover:border-[#6e7681] transition-colors',

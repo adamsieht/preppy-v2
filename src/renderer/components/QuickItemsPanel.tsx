@@ -160,9 +160,9 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
         {tab === 'items' && (
           <>
             {/* Filter + sort controls */}
-            <div className="shrink-0 border-b border-[#30363d]">
-              {/* Category filter pills — multi-select */}
-              <div className={classes.filterBar} style={{ paddingBottom: '6px' }}>
+            <div className="flex items-start gap-2 px-3 pt-2 pb-2 border-b border-[#30363d] shrink-0">
+              {/* Category filter pills — wrap freely */}
+              <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                 <button
                   className={classes.filterPill(filterCats.size === 0)}
                   onClick={() => setFilterCats(new Set())}
@@ -184,13 +184,12 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                   )
                 })}
               </div>
-              {/* Sort by row */}
-              <div className="flex items-center gap-2 px-3 pb-2">
-                <span className="text-[#6e7681] text-[10px] font-semibold uppercase tracking-wide shrink-0">Sort by</span>
+              {/* Sort controls — fixed to right */}
+              <div className="shrink-0 flex items-center gap-1">
                 <select
                   value={sortField}
                   onChange={e => { const f = e.target.value as SortField; setSortField(f); setSortAsc(f !== 'recent') }}
-                  className="flex-1 bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
+                  className="w-[118px] bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
                 >
                   <option value="name">Name</option>
                   <option value="cat">Category</option>

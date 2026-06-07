@@ -45,6 +45,7 @@ export function loadItems(): QuickListEntry[] {
 }
 
 export function fmtDuration(hrs: number): string {
+  if (hrs < 0) return 'by date'
   if (hrs < 24) return `${hrs} hr`
   const d = hrs / 24
   return `${d} day${d !== 1 ? 's' : ''}`

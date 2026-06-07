@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { QuickSingleItem, TemplateHrs, CategoryDef } from '../Preppy/types'
-import { CAT_PALETTE } from '../Preppy/constants'
+import { CAT_PALETTE, PROMPT_HRS } from '../Preppy/constants'
 import { styles } from './styles'
 
 interface AddEditItemPageProps {
@@ -147,6 +147,7 @@ export default function AddEditItemPage({ item, categories, durationOptions, onS
                 <div key={lbl} className="flex flex-col gap-[6px]">
                   <span className="text-[#adbac7] text-xs text-center font-semibold uppercase tracking-wide">{lbl}</span>
                   <select value={val} onChange={e => set(Number(e.target.value))} className={styles.selectCls}>
+                    <option value={PROMPT_HRS}>Ask by date</option>
                     {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
                   </select>
                 </div>

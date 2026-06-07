@@ -41,6 +41,7 @@ export default function Preppy() {
   const [editSort,        setEditSort]        = useState('')
   const [popularityMap,   setPopularityMap]   = useState<Map<number, number>>(new Map())
   const [printQtyTarget,  setPrintQtyTarget]  = useState<PrintQtyTarget | null>(null)
+  const [printSignal,     setPrintSignal]     = useState(0)
   const [panelCollapsed,  setPanelCollapsed]  = useState(() =>
     localStorage.getItem(PANEL_COLLAPSED_KEY) === 'true'
   )
@@ -125,15 +126,31 @@ export default function Preppy() {
   }
 
   function togglePanelCollapsed() {
-    const next = !panelCollapsed
-    setPanelCollapsed(next)
-    localStorage.setItem(PANEL_COLLAPSED_KEY, String(next))
+    if (!panelCollapsed && leftCollapsed) {
+      // Right is open, left already collapsed → swap: collapse right, expand left
+      setPanelCollapsed(true)
+      setLeftCollapsed(false)
+      localStorage.setItem(PANEL_COLLAPSED_KEY, 'true')
+      localStorage.setItem(LEFT_COLLAPSED_KEY, 'false')
+    } else {
+      const next = !panelCollapsed
+      setPanelCollapsed(next)
+      localStorage.setItem(PANEL_COLLAPSED_KEY, String(next))
+    }
   }
 
   function toggleLeftCollapsed() {
-    const next = !leftCollapsed
-    setLeftCollapsed(next)
-    localStorage.setItem(LEFT_COLLAPSED_KEY, String(next))
+    if (!leftCollapsed && panelCollapsed) {
+      // Left is open, right already collapsed → swap: collapse left, expand right
+      setLeftCollapsed(true)
+      setPanelCollapsed(false)
+      localStorage.setItem(LEFT_COLLAPSED_KEY, 'true')
+      localStorage.setItem(PANEL_COLLAPSED_KEY, 'false')
+    } else {
+      const next = !leftCollapsed
+      setLeftCollapsed(next)
+      localStorage.setItem(LEFT_COLLAPSED_KEY, String(next))
+    }
   }
 
   // ── Toast helpers ─────────────────────────────────────────────────────────
@@ -266,6 +283,7 @@ export default function Preppy() {
       if (result.success) {
         await animDone   // wait for animation to finish before showing checkmark
         setToasts(prev => prev.map(t => t.id === id ? { ...t, done: qty, state: 'success' } : t))
+        setPrintSignal(s => s + 1)
         startFadeOut(id, 3000)
       } else {
         cancelled = true
@@ -301,6 +319,7 @@ export default function Preppy() {
     }
 
     setToasts(prev => prev.map(t => t.id === id ? { ...t, done: totalQty, state: 'success' } : t))
+    setPrintSignal(s => s + 1)
     startFadeOut(id, 3000)
   }
 
@@ -379,7 +398,7 @@ export default function Preppy() {
           <div
             className={classes.leftCol}
             style={isLargeScreen
-              ? (editMode || panelCollapsed)
+              ? panelCollapsed
                 ? { flexGrow: 1, flexShrink: 1 }
                 : { width: leftWidth, flexShrink: 0, flexGrow: 0 }
               : undefined}
@@ -436,10 +455,10 @@ export default function Preppy() {
                     <div key={id} className={classes.card}>
                       <div className={classes.cardHead}>{label}</div>
                       <div className={classes.cardBody}>
-                        <div onClick={() => void handlePrint(hrs, 1)} style={{ cursor: 'pointer' }}>
+                        <div onClick={() => void handlePrint(hrs, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
                           <Label durationHrs={hrs} type={template} />
                         </div>
-                        <div className={classes.btnRow}>
+                        <div className={`${classes.btnRow} shrink-0`}>
                           <button onClick={() => void handlePrint(hrs, 5)} className={classes.btn5}>🖨 5</button>
                           <button onClick={() => handleCustomPrint(hrs, label)} className={classes.btnX}>🖨 ×</button>
                         </div>
@@ -468,31 +487,29 @@ export default function Preppy() {
           </div>
           )} {/* end leftCollapsed ternary */}
 
-          {/* ── Drag divider + Quick Items panel (hidden in edit mode) ── */}
-          {!editMode && (
-            <>
-              {!panelCollapsed && (
-                <div
-                  className={classes.divider}
-                  onPointerDown={onDividerPointerDown}
-                  onPointerMove={onDividerPointerMove}
-                  onPointerUp={onDividerPointerUp}
-                >
-                  <div className={classes.dividerBar} />
-                </div>
-              )}
-
-              <QuickItemsPanel
-                onPrint={handlePrint}
-                onPrintBundle={handlePrintBundle}
-                onCustomPrint={handleCustomItemPrint}
-                template={template}
-                durationOptions={allDurations}
-                collapsed={panelCollapsed}
-                onToggleCollapse={togglePanelCollapsed}
-              />
-            </>
+          {/* ── Drag divider + Quick Items panel ── */}
+          {!panelCollapsed && (
+            <div
+              className={classes.divider}
+              onPointerDown={onDividerPointerDown}
+              onPointerMove={onDividerPointerMove}
+              onPointerUp={onDividerPointerUp}
+            >
+              <div className={classes.dividerBar} />
+            </div>
           )}
+
+          <QuickItemsPanel
+            onPrint={handlePrint}
+            onPrintBundle={handlePrintBundle}
+            onCustomPrint={handleCustomItemPrint}
+            template={template}
+            durationOptions={allDurations}
+            collapsed={panelCollapsed}
+            onToggleCollapse={togglePanelCollapsed}
+            printSignal={printSignal}
+            isEditing={editMode}
+          />
 
         </div>
       </div>

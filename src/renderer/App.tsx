@@ -10,6 +10,7 @@ const Debug         = React.lazy(() => import('./pages/Debug'))
 const PrinterSetup      = React.lazy(() => import('./pages/PrinterSetup'))
 const LabelCalibration  = React.lazy(() => import('./pages/LabelCalibration'))
 const DateTimeSettings  = React.lazy(() => import('./pages/DateTimeSettings'))
+const PreppySettings    = React.lazy(() => import('./pages/PreppySettings'))
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/printer-setup"    element={<PrinterSetup />}     />
           <Route path="/label-calibration" element={<LabelCalibration />} />
           <Route path="/datetime-settings" element={<DateTimeSettings />} />
+          <Route path="/preppy-settings"  element={<PreppySettings />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

@@ -40,6 +40,7 @@ export interface PrintJob {
 export interface ActiveLogEntry {
   id:           string
   name?:        string
+  category?:    string
   template:     LabelTemplate
   duration_hrs: number
   qty:          number

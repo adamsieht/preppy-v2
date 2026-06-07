@@ -5,9 +5,9 @@ module.exports = {
     extend: {
       screens: {
         // Height-based breakpoints (raw media queries, not width-based)
-        // 2 rows when viewport ≥ 580px tall (cards need 456px + 122px chrome)
-        'tall':  { raw: '(min-height: 580px)' },
-        // 3 rows when viewport ≥ 800px tall (cards need 678px + 122px chrome)
+        // 2 rows when viewport ≥ 600px tall (cards 200px × 2 + gaps/padding + ~142px chrome = 590px)
+        'tall':  { raw: '(min-height: 600px)' },
+        // 3 rows when viewport ≥ 800px tall (cards 200px × 3 + gaps/padding + ~142px chrome = 790px)
         'xtall': { raw: '(min-height: 800px)' },
       },
     },

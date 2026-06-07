@@ -2,6 +2,11 @@ import type { CategoryDef, LabelTemplate } from './types'
 
 export const TEMPLATES: LabelTemplate[] = ['IX', 'OX', 'UX']
 
+// Sentinel duration meaning "no fixed shelf life — prompt the user for an
+// expiration date via the calendar when printing" (use-by-date / keep-prior-stage
+// expiration / end-of-day / other non-fixed values from the shelf life guide).
+export const PROMPT_HRS = -1
+
 export const ITEM_CATEGORIES: CategoryDef[] = [
   { id: 'item',   label: 'Item',   color: '#6e7681' },
   { id: 'veggie', label: 'Veggie', color: '#3fb950' },

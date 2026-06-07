@@ -31,7 +31,7 @@ export default function SortablePresetCard({ preset, template, onDelete }: Sorta
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative w-[220px] h-[210px] bg-[#0d1117] border rounded-lg overflow-hidden flex flex-col cursor-grab active:cursor-grabbing select-none touch-none ${
+      className={`relative w-[210px] h-[200px] bg-[#0d1117] border rounded-lg overflow-hidden flex flex-col cursor-grab active:cursor-grabbing select-none touch-none ${
         isDragging ? 'border-[#28a745] opacity-50 shadow-[0_0_0_2px_#28a745]' : 'border-[#30363d]'
       }`}
       {...attributes}
@@ -51,7 +51,7 @@ export default function SortablePresetCard({ preset, template, onDelete }: Sorta
           <TrashIcon />
         </button>
       </div>
-      <div className="bg-[#090c10] p-3 flex-1 min-h-0 overflow-hidden">
+      <div className="bg-[#090c10] p-2 flex-1 min-h-0">
         <Label durationHrs={preset.hrs} type={template} />
       </div>
     </div>

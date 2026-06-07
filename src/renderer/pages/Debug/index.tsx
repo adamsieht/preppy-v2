@@ -141,6 +141,9 @@ export default function Debug() {
 
         {/* Quick navigation */}
         <div className="flex gap-2 px-4 py-3 border-b border-[#dee2e6] bg-[#f8f9fa] shrink-0">
+          <button onClick={() => navigate('/preppy-settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            Preppy Settings
+          </button>
           <button onClick={() => navigate('/printer-setup')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
             Printer Setup
           </button>

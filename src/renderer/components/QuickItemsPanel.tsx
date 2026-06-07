@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs, ActiveLogEntry } from '../pages/Preppy/types'
-import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY, PROMPT_HRS } from '../pages/Preppy/constants'
+import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY, PROMPT_HRS, PRINT_COUNTS_KEY, HOURLY_COUNTS_KEY, FAVORITES_KEY } from '../pages/Preppy/constants'
 import { loadItems, loadStored, loadUserCats, persist, fmtDuration, fmtExpiry, timeAgo, getCat } from '../pages/Preppy/utils'
-import { PencilIcon } from './Icons'
+import { PencilIcon, StarIcon } from './Icons'
 import AddEditItemPage from '../pages/AddEditItemPage'
 import AddBundlePage from '../pages/AddBundlePage'
 import DatePromptPage from './DatePromptPage'
 import { classes } from './QuickItemsPanel.styles'
 
-type SortField = 'name' | 'cat' | 'recent'
+type SortField = 'name' | 'cat' | 'recent' | 'popular' | 'recommended'
 
 function mergeEntries(entries: ActiveLogEntry[]): ActiveLogEntry[] {
   const groups = new Map<string, ActiveLogEntry[]>()
@@ -46,6 +46,10 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
   const [sortField,     setSortField]     = useState<SortField>('name')
   const [sortAsc,       setSortAsc]       = useState(true)
   const [filterCats,    setFilterCats]    = useState<Set<string>>(new Set())
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
+  const [favorites,     setFavorites]     = useState<Set<string>>(() => { try { return new Set<string>(JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '[]')) } catch { return new Set() } })
+  const [printCounts,   setPrintCounts]   = useState<Record<string, number>>(() => { try { return JSON.parse(localStorage.getItem(PRINT_COUNTS_KEY) ?? '{}') } catch { return {} } })
+  const [hourlyCounts,  setHourlyCounts]  = useState<Record<string, number[]>>(() => { try { return JSON.parse(localStorage.getItem(HOURLY_COUNTS_KEY) ?? '{}') } catch { return {} } })
   const [recentJobs,      setRecentJobs]      = useState<PrintJob[]>([])
   const [recentLoading,   setRecentLoading]   = useState(false)
   const [activeLog,       setActiveLog]       = useState<ActiveLogEntry[]>(() => loadStored(ACTIVE_LOG_KEY))
@@ -84,7 +88,12 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
   const bundleItems = items.filter(i => i.type === 'bundle')
 
   const visibleItems = (() => {
-    const list = filterCats.size > 0 ? singleItems.filter(i => filterCats.has(i.category ?? 'item')) : singleItems
+    let list = showFavoritesOnly
+      ? singleItems.filter(i => favorites.has(i.id))
+      : filterCats.size > 0
+        ? singleItems.filter(i => filterCats.has(i.category ?? 'item'))
+        : singleItems
+    const hour = new Date().getHours()
     return [...list].sort((a, b) => {
       let cmp = 0
       if (sortField === 'name') {
@@ -94,6 +103,12 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
         const ai = order.indexOf(a.category ?? 'item')
         const bi = order.indexOf(b.category ?? 'item')
         cmp = ai !== bi ? ai - bi : a.name.localeCompare(b.name)
+      } else if (sortField === 'popular') {
+        cmp = (printCounts[a.id] ?? 0) - (printCounts[b.id] ?? 0)
+      } else if (sortField === 'recommended') {
+        const aH = (hourlyCounts[a.id] ?? [])[hour] ?? 0
+        const bH = (hourlyCounts[b.id] ?? [])[hour] ?? 0
+        cmp = aH !== bH ? aH - bH : (printCounts[a.id] ?? 0) - (printCounts[b.id] ?? 0)
       } else {
         // recent: sort by timestamp embedded in id (higher = newer)
         const aTime = parseInt(a.id.split('-')[0], 10)
@@ -149,7 +164,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     setConfirmRemoveAll(false)
   }
 
-  function logActive(name: string | undefined, category: string | undefined, tpl: LabelTemplate, duration_hrs: number, qty: number) {
+  function logActive(name: string | undefined, category: string | undefined, tpl: LabelTemplate, duration_hrs: number, qty: number, itemId?: string) {
     const entry: ActiveLogEntry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       name, category, template: tpl, duration_hrs, qty,
@@ -158,6 +173,31 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     setActiveLog(prev => {
       const next = [...prev, entry]
       persist(ACTIVE_LOG_KEY, next)
+      return next
+    })
+    if (itemId) {
+      setPrintCounts(prev => {
+        const next = { ...prev, [itemId]: (prev[itemId] ?? 0) + qty }
+        persist(PRINT_COUNTS_KEY, next)
+        return next
+      })
+      setHourlyCounts(prev => {
+        const hour = new Date().getHours()
+        const hours = [...(prev[itemId] ?? Array(24).fill(0))]
+        hours[hour] = (hours[hour] ?? 0) + qty
+        const next = { ...prev, [itemId]: hours }
+        persist(HOURLY_COUNTS_KEY, next)
+        return next
+      })
+    }
+  }
+
+  function toggleFavorite(itemId: string) {
+    setFavorites(prev => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      persist(FAVORITES_KEY, [...next])
       return next
     })
   }
@@ -255,16 +295,23 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                   )
                 })}
               </div>
-              {/* Sort controls — fixed to right */}
+              {/* Sort controls + favorites filter — fixed to right */}
               <div className="shrink-0 flex items-center gap-1">
+                <button
+                  onClick={() => setShowFavoritesOnly(prev => !prev)}
+                  title={showFavoritesOnly ? 'Showing favorites — click to show all' : 'Filter to favorites'}
+                  className={`w-7 h-7 shrink-0 flex items-center justify-center rounded border cursor-pointer transition-colors ${showFavoritesOnly ? 'border-[#e3b341] bg-[#e3b341] text-white' : 'border-[#30363d] bg-transparent text-[#6e7681] hover:text-[#e3b341] hover:border-[#e3b341]'}`}
+                ><StarIcon filled={showFavoritesOnly} /></button>
                 <select
                   value={sortField}
-                  onChange={e => { const f = e.target.value as SortField; setSortField(f); setSortAsc(f !== 'recent') }}
-                  className="w-[118px] bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
+                  onChange={e => { const f = e.target.value as SortField; setSortField(f); setSortAsc(f !== 'recent' && f !== 'popular' && f !== 'recommended') }}
+                  className="w-[130px] bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
                 >
                   <option value="name">Name</option>
                   <option value="cat">Category</option>
                   <option value="recent">Recently Added</option>
+                  <option value="popular">Most Popular</option>
+                  <option value="recommended">Recommended</option>
                 </select>
                 <button
                   onClick={() => setSortAsc(prev => !prev)}
@@ -294,6 +341,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                           style={{ color: cat.color, borderColor: cat.color + '66' }}
                         >{cat.label}</span>
                         <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
+                        <button onClick={() => toggleFavorite(item.id)} className={`${classes.gridCardIconBtn} ${favorites.has(item.id) ? 'text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
                         {isEditing && <button onClick={() => setEditingItem(item)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#58a6ff]`} title="Edit"><PencilIcon /></button>}
                         {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
                       </div>
@@ -305,8 +353,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                           <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
                         ) : (
                           <>
-                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
-                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
+                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
+                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
                             <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
                           </>
                         )}
@@ -338,11 +386,12 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                         <button onClick={() => setDatePromptItem(item)} className={classes.itemBtn(true)}>📅 Date</button>
                       ) : (
                         <>
-                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
-                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
+                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
+                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
                           <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
                         </>
                       )}
+                      <button onClick={() => toggleFavorite(item.id)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors opacity-0 group-hover:opacity-100 ${favorites.has(item.id) ? 'opacity-100 text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
                       {isEditing && <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>}
                       {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
                     </div>

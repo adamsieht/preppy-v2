@@ -21,7 +21,7 @@ export const classes = {
     ? 'flex-1 py-[9px] text-xs font-bold text-white border-b-2 border-[#28a745] bg-transparent cursor-pointer transition-colors'
     : 'flex-1 py-[9px] text-xs font-bold text-[#6e7681] border-b-2 border-transparent bg-transparent cursor-pointer hover:text-[#adbac7] transition-colors',
   panelList:       'flex-1 min-h-0 overflow-y-auto scrollbar-dark',
-  emptyState:      'flex flex-col items-center justify-center h-full gap-2 text-[#6e7681] text-sm text-center px-6',
+  emptyState:      'flex flex-col items-center justify-center h-full w-full gap-2 text-[#6e7681] text-sm text-center px-6',
   itemRow:         'flex items-center gap-2 px-3 py-[10px] border-b border-[#30363d] group hover:bg-[#161b22] transition-colors',
   itemInfo:        'flex-1 min-w-0',
   itemName:        'text-white text-sm font-medium leading-snug truncate',

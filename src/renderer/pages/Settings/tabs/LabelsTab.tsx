@@ -7,6 +7,11 @@ import LabelPreview from '../../../components/LabelPreview'
 import LabelEditor from '../../../components/label-editor/LabelEditor'
 import SettingsCard from '../../../components/settings/SettingsCard'
 import { ui } from '../../../components/settings/styles'
+import {
+  BUILTIN_STATIC_PRESETS, loadCustomStaticPresets, saveCustomStaticPresets,
+  buildStaticLayout, isBuiltinStaticPreset,
+} from '../../Preppy/staticPresets'
+import type { StaticPreset } from '../../Preppy/staticPresets'
 
 function loadCustomLayouts(): LabelLayout[] {
   try { return JSON.parse(localStorage.getItem(LABEL_LAYOUTS_KEY) ?? '[]') } catch { return [] }
@@ -31,6 +36,32 @@ export default function LabelsTab() {
   const [activeId, setActiveId]           = useState<string>(loadActiveId)
   const [editingLayout, setEditingLayout] = useState<LabelLayout | null>(null)
   const [copiedId, setCopiedId]           = useState<string | null>(null)
+
+  // Static presets (built-in + custom). Custom ones are created here and appear
+  // in the Print Labels presets row.
+  const [customStatics, setCustomStatics] = useState<StaticPreset[]>(loadCustomStaticPresets)
+  const [staticName, setStaticName]       = useState('')
+  const [staticText, setStaticText]       = useState('')
+
+  function addStaticPreset() {
+    const name = staticName.trim()
+    const text = staticText.trim()
+    if (!name || !text) return
+    const sp: StaticPreset = { id: `sp-${Date.now()}`, name, text }
+    const next = [...customStatics, sp]
+    setCustomStatics(next)
+    saveCustomStaticPresets(next)
+    setStaticName('')
+    setStaticText('')
+  }
+
+  function deleteStaticPreset(id: string) {
+    const next = customStatics.filter(s => s.id !== id)
+    setCustomStatics(next)
+    saveCustomStaticPresets(next)
+  }
+
+  const allStatics = [...BUILTIN_STATIC_PRESETS, ...customStatics]
 
   const allLayouts = useMemo(() => [...BUILTIN_LAYOUTS, ...customLayouts], [customLayouts])
   const activeLayout = allLayouts.find(l => l.id === activeId) ?? BUILTIN_LAYOUTS[0]
@@ -157,6 +188,67 @@ export default function LabelsTab() {
               ))}
             </>
           )}
+        </div>
+      </SettingsCard>
+
+      {/* Static presets */}
+      <SettingsCard
+        title="Static Presets"
+        desc="Static presets print a fixed label with no expiry time — the body is tiled with short repeating text. They still box today's day-of-week and print this week's day numbers. They appear in the Print Labels presets row."
+      >
+        {/* Create form */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <div className={ui.fieldLabel}>Name</div>
+            <input
+              className={ui.input + ' w-48'}
+              value={staticName}
+              onChange={e => setStaticName(e.target.value)}
+              placeholder="e.g. End of Day"
+              maxLength={24}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <div className={ui.fieldLabel}>Tiled text</div>
+            <input
+              className={ui.input + ' w-32'}
+              value={staticText}
+              onChange={e => setStaticText(e.target.value)}
+              placeholder="e.g. EOD"
+              maxLength={10}
+            />
+          </div>
+          <button
+            className={ui.primaryBtn}
+            onClick={addStaticPreset}
+            disabled={!staticName.trim() || !staticText.trim()}
+          >+ Add</button>
+        </div>
+
+        {/* List */}
+        <div className="flex flex-col gap-2 mt-1">
+          {allStatics.map(sp => {
+            const builtin = isBuiltinStaticPreset(sp.id)
+            return (
+              <div key={sp.id} className="flex items-center gap-3 rounded-lg px-3 py-2 border bg-[#0d1117] border-[#30363d]">
+                <div style={{ width: 116, flexShrink: 0 }}>
+                  <div style={{ transform: 'scale(0.45)', transformOrigin: 'left center' }}>
+                    <LabelPreview layout={buildStaticLayout(sp)} values={{ template: 'IX', durationHrs: 0 }} />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[#e6edf3] truncate">{sp.name}</span>
+                    {builtin && <span className="text-[10px] bg-[#30363d] text-[#adbac7] px-1.5 py-0.5 rounded font-semibold">Built-in</span>}
+                  </div>
+                  <div className="text-xs text-[#768390]">Tiled “{sp.text}” · 2"×1" Daymark</div>
+                </div>
+                {!builtin && (
+                  <button className={ui.dangerBtn} onClick={() => deleteStaticPreset(sp.id)}>Delete</button>
+                )}
+              </div>
+            )
+          })}
         </div>
       </SettingsCard>
 

@@ -1,17 +1,20 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import Label from './Label'
+import ScaledLabelPreview from './ScaledLabelPreview'
 import { TrashIcon } from './Icons'
-import type { DisplayPreset, LabelTemplate } from '../pages/Preppy/types'
+import type { DisplayPreset } from '../pages/Preppy/types'
+import type { LabelLayout, LabelValues } from '../pages/Preppy/labelTypes'
 import { classes } from './SortablePresetCard.styles'
 
 interface SortableCardProps {
-  preset:   DisplayPreset
-  template: LabelTemplate
-  onDelete: (id: string) => void
+  preset:        DisplayPreset
+  previewLayout: LabelLayout
+  previewValues: LabelValues
+  deletable:     boolean
+  onDelete:      (id: string) => void
 }
 
-export default function SortablePresetCard({ preset, template, onDelete }: SortableCardProps) {
+export default function SortablePresetCard({ preset, previewLayout, previewValues, deletable, onDelete }: SortableCardProps) {
   const {
     attributes,
     listeners,
@@ -42,17 +45,21 @@ export default function SortablePresetCard({ preset, template, onDelete }: Sorta
         <div className="flex-1 text-center py-[6px] text-white text-base font-bold tracking-wide">
           {preset.label}
         </div>
-        <button
-          onClick={e => { e.stopPropagation(); onDelete(preset.id) }}
-          onPointerDown={e => e.stopPropagation()}
-          className={classes.delBtn}
-          title="Remove preset"
-        >
-          <TrashIcon />
-        </button>
+        {deletable ? (
+          <button
+            onClick={e => { e.stopPropagation(); onDelete(preset.id) }}
+            onPointerDown={e => e.stopPropagation()}
+            className={classes.delBtn}
+            title="Remove preset"
+          >
+            <TrashIcon />
+          </button>
+        ) : (
+          <div className="w-8 shrink-0" />
+        )}
       </div>
       <div className="bg-[#090c10] p-2 flex-1 min-h-0">
-        <Label durationHrs={preset.hrs} type={template} />
+        <ScaledLabelPreview layout={previewLayout} values={previewValues} />
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import type { LabelLayout, LabelElement, LabelValues, DowStripConfig } from './labelTypes'
-import { dayjsDayToMonFirst } from './labelDefs'
+import { dayjsDayToMonFirst, getLabelSize } from './labelDefs'
 
 // ── Date format map (dayjs tokens) ──────────────────────────────────────────
 export const DATE_FORMATS: { key: string; label: string; fmt: string }[] = [
@@ -40,14 +40,31 @@ function resolveText(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, ex
   }
 }
 
+// ── DOW-anchored X ──────────────────────────────────────────────────────────
+// Centres an element under the boxed (expiry) day's column in the DOW strip.
+function dowAnchorX(cfg: DowStripConfig, expiry: dayjs.Dayjs, text: string, fontSize: number): number {
+  const idx   = dayjsDayToMonFirst(expiry.day())
+  const cellX = cfg.x + idx * cfg.cellW
+  const textW = text.length * fontSize * 0.6
+  return Math.round(cellX + Math.max(0, (cfg.cellW - textW) / 2))
+}
+
 // ── Element ZPL fragment ────────────────────────────────────────────────────
-function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs): string {
+function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, dowConfig?: DowStripConfig, labelW = 0): string {
   const text = resolveText(el, values, now, expiry)
   if (!text) return ''
   const fw = el.rotation === 90 ? 'R' : el.rotation === 180 ? 'I' : el.rotation === 270 ? 'B' : 'N'
   const rotate = el.rotation !== 0 ? `^FW${fw}` : ''
   const w = el.fontWidth ?? el.fontSize
-  return `${rotate}^FO${el.x},${el.y}^A0N,${el.fontSize},${w}^FD${text}^FS`
+  const textW = text.length * el.fontSize * 0.6
+  const baseX = el.anchorDowDay && dowConfig
+    ? dowAnchorX(dowConfig, expiry, text, el.fontSize)
+    : el.centerX && labelW
+      ? Math.round((labelW - textW) / 2)
+      : el.x
+  const draw = (dx: number) => `${rotate}^FO${baseX + dx},${el.y}^A0N,${el.fontSize},${w}^FD${text}^FS`
+  // Bold: overstrike with a 1-dot horizontal offset so strokes print heavier.
+  return el.bold ? `${draw(0)}\n${draw(1)}` : draw(0)
 }
 
 // ── DOW strip ZPL ───────────────────────────────────────────────────────────
@@ -80,6 +97,7 @@ export function generateZpl(
 ): string {
   const now    = dayjs()
   const expiry = now.add(values.durationHrs, 'hour')
+  const labelW = getLabelSize(layout.sizeKey).dotsW
 
   const lines: string[] = ['^XA']
   if (labelHomeX !== 0 || labelHomeY !== 0) {
@@ -93,7 +111,7 @@ export function generateZpl(
 
   // User-placed elements
   for (const el of layout.elements) {
-    const fragment = elementZpl(el, values, now, expiry)
+    const fragment = elementZpl(el, values, now, expiry, layout.dowConfig, labelW)
     if (fragment) lines.push(fragment)
   }
 

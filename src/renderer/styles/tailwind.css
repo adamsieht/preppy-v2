@@ -2,6 +2,228 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── CSS custom properties ─────────────────────────────────────────────────── */
+:root {
+  /* Dark theme (default) */
+  --c-base:            #0d1117;
+  --c-base-deep:       #090c10;
+  --c-surface:         #161b22;
+  --c-elevated:        #21262d;
+  --c-elevated2:       #1c2128;
+  --c-border:          #30363d;
+  --c-border2:         #444c56;
+  --c-fg:              #adbac7;
+  --c-fg-dim:          #8b949e;
+  --c-fg-muted:        #6e7681;
+  --c-fg-head:         #e6edf3;
+  /* Preppy badge */
+  --badge-bg:          #0f1419;
+  --badge-stripe:      rgba(255,255,255,0.16);
+  --badge-stripe-gap:  4px;
+  --badge-stripe-end:  7px;
+  --badge-shadow:      rgba(0,0,0,0.65);
+  --badge-text:        #ffffff;
+  --badge-text-shadow: none;
+  /* Accent — green by default */
+  --c-accent:          #28a745;
+  --c-accent-hover:    #2ea043;
+  --c-accent-dark:     #238636;
+  --c-accent-light:    #3fb950;
+  --c-accent-subtle:   #0d2818;
+  --c-accent-subtle2:  #1a4731;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+html.theme-light {
+  --badge-bg:          #f4f7fa;
+  --badge-stripe:      rgba(0,0,0,0.07);
+  --badge-stripe-gap:  5.5px;
+  --badge-stripe-end:  7px;
+  --badge-shadow:      rgba(0,0,0,0.10);
+  --badge-text:        var(--c-accent);
+  --badge-text-shadow: 0 0 8px rgba(255,255,255,0.9), 0 1px 2px rgba(255,255,255,0.6);
+  --c-base:            #f6f8fa;
+  --c-base-deep:       #eaeef2;
+  --c-surface:         #ffffff;
+  --c-elevated:        #eaeef2;
+  --c-elevated2:       #f0f3f6;
+  --c-border:          #d0d7de;
+  --c-border2:         #afb8c1;
+  --c-fg:              #24292f;
+  --c-fg-dim:          #57606a;
+  --c-fg-muted:        #6e7781;
+  --c-fg-head:         #0d1117;
+  --c-accent-subtle:   #e6f4ea;
+  --c-accent-subtle2:  #dcf0e6;
+}
+
+/* ── Accent color palettes ───────────────────────────────────────────────── */
+html[data-accent="blue"] {
+  --c-accent:          #1f6feb;
+  --c-accent-hover:    #388bfd;
+  --c-accent-dark:     #1158c7;
+  --c-accent-light:    #58a6ff;
+  --c-accent-subtle:   #0d1f3c;
+  --c-accent-subtle2:  #1a3050;
+}
+html.theme-light[data-accent="blue"] {
+  --c-accent-subtle:   #dbeafe;
+  --c-accent-subtle2:  #bfdbfe;
+}
+
+html[data-accent="purple"] {
+  --c-accent:          #8b5cf6;
+  --c-accent-hover:    #a78bfa;
+  --c-accent-dark:     #7c3aed;
+  --c-accent-light:    #c4b5fd;
+  --c-accent-subtle:   #1e0a3c;
+  --c-accent-subtle2:  #2d1b50;
+}
+html.theme-light[data-accent="purple"] {
+  --c-accent-subtle:   #ede9fe;
+  --c-accent-subtle2:  #ddd6fe;
+}
+
+html[data-accent="orange"] {
+  --c-accent:          #f97316;
+  --c-accent-hover:    #fb923c;
+  --c-accent-dark:     #ea6c00;
+  --c-accent-light:    #fdba74;
+  --c-accent-subtle:   #2d1505;
+  --c-accent-subtle2:  #3d2208;
+}
+html.theme-light[data-accent="orange"] {
+  --c-accent-subtle:   #ffedd5;
+  --c-accent-subtle2:  #fed7aa;
+}
+
+html[data-accent="red"] {
+  --c-accent:          #ef4444;
+  --c-accent-hover:    #f87171;
+  --c-accent-dark:     #dc2626;
+  --c-accent-light:    #fca5a5;
+  --c-accent-subtle:   #2d0a0a;
+  --c-accent-subtle2:  #3d1010;
+}
+html.theme-light[data-accent="red"] {
+  --c-accent-subtle:   #fee2e2;
+  --c-accent-subtle2:  #fecaca;
+}
+
+html[data-accent="teal"] {
+  --c-accent:          #0d9488;
+  --c-accent-hover:    #14b8a6;
+  --c-accent-dark:     #0f766e;
+  --c-accent-light:    #5eead4;
+  --c-accent-subtle:   #042220;
+  --c-accent-subtle2:  #073433;
+}
+html.theme-light[data-accent="teal"] {
+  --c-accent-subtle:   #ccfbf1;
+  --c-accent-subtle2:  #99f6e4;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* ACCENT COLOR OVERRIDES — replace every hardcoded #28a745 / #2ea043 etc.  */
+/* Applies in both dark and light themes.                                    */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Backgrounds */
+html .bg-\[\#28a745\]    { background-color: var(--c-accent) }
+html .bg-\[\#2ea043\]    { background-color: var(--c-accent-hover) }
+html .bg-\[\#0d2818\]    { background-color: var(--c-accent-subtle) }
+html .bg-\[\#1a4731\]    { background-color: var(--c-accent-subtle2) }
+html .bg-\[\#1a2a1a\]    { background-color: var(--c-accent-subtle) }
+html .hover\:bg-\[\#2ea043\]:hover   { background-color: var(--c-accent-hover) }
+html .active\:bg-\[\#238636\]:active { background-color: var(--c-accent-dark) }
+
+/* Borders */
+html .border-\[\#28a745\]                { border-color: var(--c-accent) }
+html .border-\[\#2ea043\]                { border-color: var(--c-accent-hover) }
+html .border-\[\#238636\]                { border-color: var(--c-accent-dark) }
+html .border-\[\#3fb950\]                { border-color: var(--c-accent-light) }
+html .hover\:border-\[\#28a745\]:hover   { border-color: var(--c-accent) }
+html .focus\:border-\[\#28a745\]:focus   { border-color: var(--c-accent) }
+
+/* Text */
+html .text-\[\#28a745\]  { color: var(--c-accent) }
+html .text-\[\#3fb950\]  { color: var(--c-accent-light) }
+html .text-\[\#2ea043\]  { color: var(--c-accent-hover) }
+
+/* On-screen keyboard (touch.css) */
+html .settings-keyboard .hg-button:active,
+html .settings-keyboard .hg-button.hg-activeButton { background: var(--c-accent) }
+
+/* Outline/shadow glow on dragging preset card */
+html .shadow-\[0_0_0_2px_\#28a745\] { box-shadow: 0 0 0 2px var(--c-accent) }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* LIGHT THEME OVERRIDES                                                      */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
+/* — Backgrounds — */
+html.theme-light .bg-\[\#0d1117\]  { background-color: var(--c-base) }
+html.theme-light .bg-\[\#090c10\]  { background-color: var(--c-base-deep) }
+html.theme-light .bg-\[\#161b22\]  { background-color: var(--c-surface) }
+html.theme-light .bg-\[\#21262d\]  { background-color: var(--c-elevated) }
+html.theme-light .bg-\[\#1c2128\]  { background-color: var(--c-elevated2) }
+html.theme-light .bg-\[\#3d1a1a\]  { background-color: #fde8e8 }
+
+/* Semi-transparent dark overlays → semi-transparent light overlays */
+html.theme-light .bg-\[\#0d1117\]\/85 { background-color: rgb(246 248 250 / 0.9) }
+html.theme-light .bg-\[\#0d1117\]\/80 { background-color: rgb(246 248 250 / 0.85) }
+
+/* — Borders — */
+html.theme-light .border-\[\#30363d\]               { border-color: var(--c-border) }
+html.theme-light .border-\[\#444c56\]               { border-color: var(--c-border2) }
+html.theme-light .hover\:border-\[\#6e7681\]:hover  { border-color: var(--c-border2) }
+
+/* — Text — */
+/* First make all white text dark, then restore white on colored buttons below */
+html.theme-light .text-white                         { color: var(--c-fg-head) }
+html.theme-light .hover\:text-white:hover            { color: var(--c-fg-head) }
+html.theme-light .text-\[\#adbac7\]                  { color: var(--c-fg) }
+html.theme-light .text-\[\#e6edf3\]                  { color: var(--c-fg-head) }
+html.theme-light .text-\[\#8b949e\]                  { color: var(--c-fg-dim) }
+html.theme-light .text-\[\#6e7681\]                  { color: var(--c-fg-muted) }
+html.theme-light .hover\:text-\[\#adbac7\]:hover     { color: var(--c-fg) }
+
+/* Restore white text on colored (accent / danger) button backgrounds.       */
+/* These rules must come AFTER the .text-white override above so they win.   */
+html.theme-light .bg-\[\#28a745\]   { color: white }
+html.theme-light .bg-\[\#2ea043\]   { color: white }
+html.theme-light .bg-\[\#f85149\]   { color: white }
+html.theme-light .bg-\[\#da3633\]   { color: white }
+html.theme-light .bg-\[\#1f6feb\]   { color: white }
+html.theme-light .hover\:bg-\[\#2ea043\]:hover  { color: white }
+html.theme-light .hover\:bg-\[\#da3633\]:hover  { color: white }
+html.theme-light .hover\:bg-\[\#388bfd\]:hover  { color: white }
+html.theme-light .hover\:bg-\[\#f85149\]:hover  { color: white }
+
+/* — Hover background states — */
+html.theme-light .hover\:bg-\[\#161b22\]:hover  { background-color: #f0f3f6 }
+html.theme-light .hover\:bg-\[\#21262d\]:hover  { background-color: var(--c-elevated) }
+
+/* — Scrollbar — */
+html.theme-light .scrollbar-dark {
+  scrollbar-color: #d0d7de transparent;
+}
+html.theme-light .scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #d0d7de;
+}
+html.theme-light .scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: #afb8c1;
+}
+
+/* — On-screen keyboard — */
+html.theme-light .settings-keyboard .hg-button {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+  color: #0d1117;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+
 /* Slim dark horizontal scrollbar for the Preppy cards row */
 .scrollbar-dark {
   scrollbar-width: thin;

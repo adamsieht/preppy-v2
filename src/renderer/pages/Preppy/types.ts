@@ -5,6 +5,7 @@ export interface TemplateHrs { IX: number; OX: number; UX: number }
 export type PrintQtyTarget =
   | { kind: 'preset'; label: string; durationHrs: number }
   | { kind: 'item';   label: string; templateHrs: TemplateHrs }
+  | { kind: 'static'; label: string; staticId: string }
 
 export interface BundleEntry {
   hrs:   TemplateHrs
@@ -60,12 +61,9 @@ export interface CustomPreset {
   hrs:   number
 }
 
-export interface DisplayPreset {
-  id:        string
-  label:     string
-  hrs:       number
-  isDefault: boolean
-}
+export type DisplayPreset =
+  | { kind: 'duration'; id: string; label: string; hrs: number; isDefault: boolean }
+  | { kind: 'static';   id: string; label: string; staticId: string }
 
 export interface ToastState {
   id:        string

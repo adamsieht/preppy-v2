@@ -24,6 +24,8 @@ export interface LabelElement {
   text?:      string          // for 'static'
   dateFormat?: string         // for date/time elements
   bold?:      boolean
+  anchorDowDay?: boolean      // daymark only: x tracks the boxed day's column
+  centerX?:   boolean         // horizontally centre the element on the label
 }
 
 export interface DowStripConfig {

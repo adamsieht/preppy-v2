@@ -6,16 +6,25 @@ export const classes = {
   collapseStrip:   'hidden xl:flex flex-col w-9 shrink-0 border-l border-[#30363d] items-center justify-start pt-3 bg-[#0d1117] cursor-pointer hover:bg-[#161b22] transition-colors select-none',
   // Fixed-size cards that fill vertically, then scroll horizontally — consistent
   // with the preset cards and the Recent tab's active items.
-  // 140px in normal mode (footer hidden → more room), 120px in edit mode (footer visible)
+  // Taller cards so they fill the column height: 160px normal (footer hidden →
+  // more room), 144px in edit mode (footer visible).
   panelGrid: (editing: boolean) => editing
-    ? 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,120px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark'
-    : 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,140px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark',
+    ? 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,144px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark'
+    : 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,160px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark',
+  // Label-preview card style — bigger cards that show a true-to-print preview.
+  // Slightly taller than the standard cards so the label preview has room while
+  // still fitting 3 rows. Always a grid (mirrors the left-column preset cards).
+  panelGridLabel: (editing: boolean) => editing
+    ? 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,150px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark'
+    : 'grid grid-flow-col [grid-template-rows:repeat(auto-fill,166px)] [grid-auto-columns:200px] gap-2 p-2 overflow-x-auto overflow-y-hidden flex-1 min-h-0 scrollbar-dark',
+  labelCard:       'relative flex flex-col border border-[#30363d] rounded-lg bg-[#0d1117] overflow-hidden',
   gridCard:        'flex flex-col border border-[#30363d] rounded-lg bg-[#0d1117] overflow-hidden',
   gridCardHead:    'flex items-center gap-1 px-2 pt-2 pb-0',
   gridCardMeta:    'px-2 pb-1 text-[#6e7681] text-[11px] truncate',
   gridCardBtns:    'flex gap-1 px-2 pb-2 pt-1 mt-auto',
   gridCardBtn:     (green: boolean) => `flex-1 min-h-[40px] text-xs font-bold rounded border cursor-pointer disabled:opacity-60 transition-colors ${green ? 'border-[#28a745] bg-[#28a745] text-white hover:bg-[#2ea043]' : 'border-[#30363d] bg-[#161b22] text-white hover:border-[#6e7681]'}`,
   gridCardIconBtn: 'shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors',
+  gridCardIconBtnSm: 'shrink-0 w-6 h-6 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors',
   panelTabBar:     'flex border-b border-[#30363d] shrink-0',
   panelTab:        (active: boolean) => active
     ? 'flex-1 py-[9px] text-xs font-bold text-white border-b-2 border-[#28a745] bg-transparent cursor-pointer transition-colors'

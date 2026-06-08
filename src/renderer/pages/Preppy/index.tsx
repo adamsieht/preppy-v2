@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import dayjs from 'dayjs'
 import {
   DndContext,
   closestCenter,
@@ -13,7 +15,13 @@ import {
   rectSortingStrategy,
 } from '@dnd-kit/sortable'
 import PageLayout from '../../components/PageLayout'
-import Label from '../../components/Label'
+import ScaledLabelPreview from '../../components/ScaledLabelPreview'
+import Clock from '../../components/Clock'
+import PrinterStatus from '../../components/PrinterStatus'
+import { loadActiveLayout } from './labelDefs'
+import { loadStaticPresets, buildStaticLayout } from './staticPresets'
+import type { StaticPreset } from './staticPresets'
+import { generateZpl } from './labelZpl'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
 import type { LabelTemplate, CustomPreset, DisplayPreset, PrintQtyTarget, BundleEntry, TemplateHrs, ToastState } from './types'
 import { TEMPLATES, DEFAULT_PRESETS, DEFAULT_DURATIONS, PRESETS_KEY, PRESET_ORDER_KEY, HIDDEN_PRESETS_KEY, PANEL_COLLAPSED_KEY, LEFT_COLLAPSED_KEY, WIDTH_KEY } from './constants'
@@ -25,6 +33,61 @@ import PrintToast from '../../components/PrintToast'
 import SortablePresetCard from '../../components/SortablePresetCard'
 import CalendarPicker from '../../components/CalendarPicker'
 import QuickItemsPanel from '../../components/QuickItemsPanel'
+
+// ── Custom header for the main Preppy screen ─────────────────────────────────
+function PrepyHeader() {
+  const [now, setNow] = useState(dayjs)
+  const navigate      = useNavigate()
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(dayjs()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  return (
+    <>
+      {/* Left: recessed dot-grid badge */}
+      <span
+        style={{
+          backgroundColor: 'var(--badge-bg)',
+          backgroundImage: [
+            'repeating-linear-gradient(-45deg, transparent 0, transparent var(--badge-stripe-gap), var(--badge-stripe) var(--badge-stripe-gap), var(--badge-stripe) var(--badge-stripe-end))',
+            'radial-gradient(circle, color-mix(in srgb, var(--c-accent) 60%, transparent) 0 1px, transparent 1px)',
+          ].join(', '),
+          backgroundSize: 'auto, 6px 6px',
+          border: '1.5px solid var(--c-accent)',
+          boxShadow: 'inset 0 2px 6px var(--badge-shadow), inset 0 -1px 0 rgba(255,255,255,0.04)',
+          color: 'var(--badge-text)',
+          textShadow: 'var(--badge-text-shadow)',
+        }}
+        className="shrink-0 inline-flex items-center px-5 py-[7px] rounded-lg text-2xl font-black tracking-[0.12em] uppercase select-none"
+      >
+        Preppy
+      </span>
+
+      {/* Center: big date — absolutely centered so it doesn't shift with left/right widths */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+        <span className="text-xl font-bold text-[#e6edf3]">
+          {now.format('dddd, MMMM D')}
+        </span>
+      </div>
+
+      {/* Right: printer status + settings cog + clock with seconds */}
+      <div className="ml-auto flex items-center gap-3 shrink-0">
+        <PrinterStatus />
+        <button
+          onClick={() => navigate('/settings')}
+          className="bg-transparent border-0 text-[#768390] text-[1.25rem] leading-none cursor-pointer px-1 rounded hover:text-[#adbac7] transition-colors"
+          title="Settings"
+        >
+          ⚙
+        </button>
+        <Clock showSeconds timeOnly />
+      </div>
+    </>
+  )
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Preppy() {
   const [template,        setTemplate]        = useState<LabelTemplate>('IX')
@@ -53,6 +116,8 @@ export default function Preppy() {
     return isNaN(saved) ? 800 : Math.max(440, Math.min(saved, 1600))
   })
   const [isLargeScreen, setIsLargeScreen] = useState(() => window.innerWidth >= 1280)
+  const [activeLayout]  = useState(loadActiveLayout)
+  const [staticPresets] = useState(loadStaticPresets)
   const divDragRef = useRef<{ startX: number; startW: number } | null>(null)
   const errorMsg   = useErrorMsg()
 
@@ -79,26 +144,38 @@ export default function Preppy() {
 
     const defaults: DisplayPreset[] = DEFAULT_PRESETS
       .filter(p => !hiddenSet.has(`d-${p.hrs}`))
-      .map(p => ({ id: `d-${p.hrs}`, label: p.label, hrs: p.hrs, isDefault: true }))
+      .map(p => ({ kind: 'duration', id: `d-${p.hrs}`, label: p.label, hrs: p.hrs, isDefault: true }))
 
     const customs: DisplayPreset[] = customPresets
       .filter(p => !hiddenSet.has(p.id) && !defaultHrs.has(p.hrs))
-      .map(p => ({ id: p.id, label: p.label, hrs: p.hrs, isDefault: false }))
+      .map(p => ({ kind: 'duration', id: p.id, label: p.label, hrs: p.hrs, isDefault: false }))
 
-    const all = [...defaults, ...customs]
+    const statics: DisplayPreset[] = staticPresets
+      .map(sp => ({ kind: 'static', id: `s-${sp.id}`, label: sp.name, staticId: sp.id }))
+
+    // Sort key for the natural (no saved order) case: duration presets ordered
+    // by hours, static presets appended after.
+    const naturalKey = (p: DisplayPreset) => p.kind === 'duration' ? p.hrs : Infinity
+
+    const all = [...defaults, ...customs, ...statics]
 
     if (presetOrder.length === 0) {
-      return all.sort((a, b) => a.hrs - b.hrs)
+      return all.sort((a, b) => naturalKey(a) - naturalKey(b))
     }
 
     const orderMap = new Map(presetOrder.map((id, i) => [id, i]))
     return all.sort((a, b) => {
       const ai = orderMap.get(a.id) ?? Infinity
       const bi = orderMap.get(b.id) ?? Infinity
-      if (ai === Infinity && bi === Infinity) return a.hrs - b.hrs
+      if (ai === Infinity && bi === Infinity) return naturalKey(a) - naturalKey(b)
       return ai - bi
     })
-  }, [customPresets, hiddenPresets, presetOrder])
+  }, [customPresets, hiddenPresets, presetOrder, staticPresets])
+
+  const staticById = useMemo(
+    () => new Map(staticPresets.map(sp => [sp.id, sp])),
+    [staticPresets],
+  )
 
   const allDurations = useMemo(() => {
     const defaultHrs = new Set(DEFAULT_DURATIONS.map(o => o.hrs))
@@ -237,10 +314,13 @@ export default function Preppy() {
 
   function handleSort(sort: string) {
     if (!sort) return
+    // Static presets have no duration/popularity — keep them after duration presets.
+    const hrsOf = (p: DisplayPreset) => p.kind === 'duration' ? p.hrs : Infinity
+    const popOf = (p: DisplayPreset) => p.kind === 'duration' ? (popularityMap.get(p.hrs) ?? 0) : -1
     const sorted = [...allPresets]
-    if (sort === 'asc')     sorted.sort((a, b) => a.hrs - b.hrs)
-    if (sort === 'desc')    sorted.sort((a, b) => b.hrs - a.hrs)
-    if (sort === 'popular') sorted.sort((a, b) => (popularityMap.get(b.hrs) ?? 0) - (popularityMap.get(a.hrs) ?? 0))
+    if (sort === 'asc')     sorted.sort((a, b) => hrsOf(a) - hrsOf(b))
+    if (sort === 'desc')    sorted.sort((a, b) => hrsOf(b) - hrsOf(a))
+    if (sort === 'popular') sorted.sort((a, b) => popOf(b) - popOf(a))
     reorderPresets(sorted.map(p => p.id))
     setEditSort('')
   }
@@ -329,9 +409,46 @@ export default function Preppy() {
   function handleCustomItemPrint(templateHrs: TemplateHrs, itemLabel: string) {
     setPrintQtyTarget({ kind: 'item', templateHrs, label: itemLabel })
   }
+  function handleCustomPrintStatic(sp: StaticPreset) {
+    setPrintQtyTarget({ kind: 'static', staticId: sp.id, label: sp.name })
+  }
+
+  // Static presets: generate the ZPL once (no duration — uses "today" for the
+  // day-of-week box) and print qty copies of it.
+  async function handlePrintStatic(sp: StaticPreset, qty: number) {
+    const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    setToasts(prev => [...prev, { id, qty, done: 0, state: 'printing', label: sp.name }])
+
+    let cancelled = false
+    const animDone = enqueueAnimation(async () => {
+      for (let count = 1; count <= qty; count++) {
+        if (cancelled) break
+        setToasts(prev => prev.map(t =>
+          t.id === id && t.state === 'printing' ? { ...t, done: count } : t
+        ))
+        await new Promise<void>(r => setTimeout(r, count === qty ? 950 : 400))
+      }
+    })
+
+    try {
+      const zpl = generateZpl(buildStaticLayout(sp), { template, durationHrs: 0 })
+      const result = await window.electronAPI.printZpl({ zpl, qty })
+      if (result.success) {
+        await animDone
+        setToasts(prev => prev.map(t => t.id === id ? { ...t, done: qty, state: 'success' } : t))
+        startFadeOut(id, 3000)
+      } else {
+        cancelled = true
+        setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: result.error ?? 'Print failed' } : t))
+      }
+    } catch (err) {
+      cancelled = true
+      setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: errorMsg(err, 'Print failed') } : t))
+    }
+  }
 
   return (
-    <PageLayout title="Print Labels" noPad>
+    <PageLayout customHeader={<PrepyHeader />} noPad>
       <div className={classes.page}>
 
         {/* ── Full-width top: IX / OX / UX template selector + edit controls ── */}
@@ -438,33 +555,64 @@ export default function Preppy() {
                     onDragEnd={handleDragEnd}
                   >
                     <SortableContext items={allPresets.map(p => p.id)} strategy={rectSortingStrategy}>
-                      {allPresets.map(preset => (
-                        <SortablePresetCard
-                          key={preset.id}
-                          preset={preset}
-                          template={template}
-                          onDelete={deletePreset}
-                        />
-                      ))}
+                      {allPresets.map(preset => {
+                        const sp = preset.kind === 'static' ? staticById.get(preset.staticId) : undefined
+                        const previewLayout = sp ? buildStaticLayout(sp) : activeLayout
+                        const previewValues = preset.kind === 'static'
+                          ? { template, durationHrs: 0 }
+                          : { template, durationHrs: preset.hrs }
+                        return (
+                          <SortablePresetCard
+                            key={preset.id}
+                            preset={preset}
+                            previewLayout={previewLayout}
+                            previewValues={previewValues}
+                            deletable={preset.kind === 'duration'}
+                            onDelete={deletePreset}
+                          />
+                        )
+                      })}
                     </SortableContext>
                   </DndContext>
                 </div>
               ) : (
                 <div className={classes.cardsRow}>
-                  {allPresets.map(({ id, label, hrs }) => (
-                    <div key={id} className={classes.card}>
-                      <div className={classes.cardHead}>{label}</div>
-                      <div className={classes.cardBody}>
-                        <div onClick={() => void handlePrint(hrs, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
-                          <Label durationHrs={hrs} type={template} />
+                  {allPresets.map(preset => {
+                    if (preset.kind === 'static') {
+                      const sp = staticById.get(preset.staticId)
+                      if (!sp) return null
+                      const layout = buildStaticLayout(sp)
+                      return (
+                        <div key={preset.id} className={classes.card}>
+                          <div className={classes.cardHead}>{preset.label}</div>
+                          <div className={classes.cardBody}>
+                            <div onClick={() => void handlePrintStatic(sp, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
+                              <ScaledLabelPreview layout={layout} values={{ template, durationHrs: 0 }} />
+                            </div>
+                            <div className={`${classes.btnRow} shrink-0`}>
+                              <button onClick={() => void handlePrintStatic(sp, 5)} className={classes.btn5}>🖨 5</button>
+                              <button onClick={() => handleCustomPrintStatic(sp)} className={classes.btnX}>🖨 ×</button>
+                            </div>
+                          </div>
                         </div>
-                        <div className={`${classes.btnRow} shrink-0`}>
-                          <button onClick={() => void handlePrint(hrs, 5)} className={classes.btn5}>🖨 5</button>
-                          <button onClick={() => handleCustomPrint(hrs, label)} className={classes.btnX}>🖨 ×</button>
+                      )
+                    }
+                    const { id, label, hrs } = preset
+                    return (
+                      <div key={id} className={classes.card}>
+                        <div className={classes.cardHead}>{label}</div>
+                        <div className={classes.cardBody}>
+                          <div onClick={() => void handlePrint(hrs, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
+                            <ScaledLabelPreview layout={activeLayout} values={{ template, durationHrs: hrs }} />
+                          </div>
+                          <div className={`${classes.btnRow} shrink-0`}>
+                            <button onClick={() => void handlePrint(hrs, 5)} className={classes.btn5}>🖨 5</button>
+                            <button onClick={() => handleCustomPrint(hrs, label)} className={classes.btnX}>🖨 ×</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )
             ) : (
@@ -472,7 +620,6 @@ export default function Preppy() {
               <CalendarPicker
                 template={template}
                 onPrint={handlePrint}
-                onCustomPrint={handleCustomPrint}
               />
             )}
 
@@ -515,7 +662,20 @@ export default function Preppy() {
       </div>
 
       {/* ── Print quantity numpad page ── */}
-      {printQtyTarget && (
+      {printQtyTarget && printQtyTarget.kind === 'static' ? (() => {
+        const sp = staticById.get(printQtyTarget.staticId)
+        if (!sp) return null
+        return (
+          <PrintQtyPage
+            label={printQtyTarget.label}
+            initTemplate={template}
+            durationHrs={0}
+            staticLayout={buildStaticLayout(sp)}
+            onPrint={(qty) => { void handlePrintStatic(sp, qty); setPrintQtyTarget(null) }}
+            onClose={() => setPrintQtyTarget(null)}
+          />
+        )
+      })() : printQtyTarget && (
         <PrintQtyPage
           label={printQtyTarget.label}
           initTemplate={template}

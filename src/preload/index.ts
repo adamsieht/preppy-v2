@@ -7,6 +7,7 @@ import type { WifiNetwork } from '../main/services/wifi.service'
 
 export interface ElectronAPI {
   print: (args: { template: LabelTemplate; durationHrs: number; qty: number }) => Promise<{ success: boolean; error?: string }>
+  printZpl: (args: { zpl: string; qty: number }) => Promise<{ success: boolean; error?: string }>
   previewPrint: (args: { template: LabelTemplate; durationHrs: number }) => Promise<PreviewResult>
   getPrintHistory: (limit?: number, offset?: number) => Promise<PrintJob[]>
   listSensors: () => Promise<Sensor[]>
@@ -33,6 +34,8 @@ export interface ElectronAPI {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   print: (args: PrintArgs) => ipcRenderer.invoke(IPC.PRINTER_PRINT, args),
+
+  printZpl: (args: { zpl: string; qty: number }) => ipcRenderer.invoke(IPC.PRINTER_PRINT_ZPL, args),
 
   previewPrint: (args: { template: LabelTemplate; durationHrs: number }) =>
     ipcRenderer.invoke(IPC.PRINTER_PREVIEW, args),

@@ -24,7 +24,7 @@ interface LayoutProps {
 type Props = LegacyProps | LayoutProps
 
 // Pixels per ZPL dot — keeps preview size reasonable
-const PX_PER_DOT = 0.62
+export const PX_PER_DOT = 0.62
 
 // ── DOW strip (simulates pre-printed Daymark color blocks) ──────────────────
 function DowStrip({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Dayjs }) {
@@ -115,7 +115,19 @@ function LayoutPreview({ layout, values }: { layout: LabelLayout; values: LabelV
         if (!text) return null
         const fs = el.fontSize * PX_PER_DOT
         const fw = (el.fontWidth ?? el.fontSize) * PX_PER_DOT
-        const x  = el.x * PX_PER_DOT
+        // anchorDowDay: x tracks the boxed (expiry) day's column in the strip.
+        // centerX: x centres the element horizontally on the label.
+        const textWdot = text.length * el.fontSize * 0.6
+        let xDot = el.x
+        if (el.anchorDowDay && layout.dowConfig) {
+          const cfg   = layout.dowConfig
+          const idx   = dayjsDayToMonFirst(expiry.day())
+          const cellX = cfg.x + idx * cfg.cellW
+          xDot = cellX + Math.max(0, (cfg.cellW - textWdot) / 2)
+        } else if (el.centerX) {
+          xDot = (size.dotsW - textWdot) / 2
+        }
+        const x  = xDot * PX_PER_DOT
         const y  = el.y * PX_PER_DOT
 
         const rotMap: Record<number, string> = { 0: 'none', 90: 'rotate(90deg)', 180: 'rotate(180deg)', 270: 'rotate(270deg)' }

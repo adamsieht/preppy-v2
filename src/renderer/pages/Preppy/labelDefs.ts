@@ -1,4 +1,5 @@
 import type { LabelSize, LabelStock, LabelLayout, DowStripConfig } from './labelTypes'
+import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY } from './constants'
 
 // ── Physical label sizes at 203 DPI ─────────────────────────────────────────
 export const LABEL_SIZES: LabelSize[] = [
@@ -25,8 +26,9 @@ export const DEFAULT_DOW_CONFIG: DowStripConfig = {
 }
 
 // Browser-side colours matching the Daymark DITM pre-printed ink (mon-first, index 0-6).
-export const DOW_COLORS        = ['#111111','#6b21a8','#1d4ed8','#0f766e','#ca8a04','#b91c1c','#e5e7eb']
-export const DOW_TEXT_COLORS   = ['#ffffff','#ffffff','#ffffff','#ffffff','#ffffff','#ffffff','#111111']
+// Order: Mon, Tue, Wed, Thu, Fri, Sat, Sun
+export const DOW_COLORS      = ['#1D6ECC','#E8A800','#CC1E1E','#7A3F1E','#1E8C3C','#E07020','#1A1A1A']
+export const DOW_TEXT_COLORS = ['#ffffff','#ffffff','#ffffff','#ffffff','#ffffff','#ffffff','#ffffff']
 export const DOW_ABBR          = ['M','Tu','W','Th','F','Sa','Su']
 export const DOW_FULL_NAMES    = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 
@@ -58,9 +60,12 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
     isBuiltin: true, sizeKey: '2x1', stockKey: 'daymark',
     dowConfig: { ...DEFAULT_DOW_CONFIG },
     elements: [
-      { id: 'e1', type: 'dow-name',    x: 20,  y: 58,  fontSize: 36, fontWidth: 36, rotation: 0 },
-      { id: 'e2', type: 'template-id', x: 20,  y: 98,  fontSize: 28, fontWidth: 28, rotation: 0 },
-      { id: 'e3', type: 'expiry-date', x: 20,  y: 130, fontSize: 36, fontWidth: 36, rotation: 0, dateFormat: 'MM/DD/YY' },
+      // IX/OX/UX under the boxed current day, along the top
+      { id: 'e1', type: 'template-id', x: 0,   y: 54,  fontSize: 24, fontWidth: 24, rotation: 0, anchorDowDay: true },
+      // Day of week — bottom-left
+      { id: 'e2', type: 'dow-name',    x: 10,  y: 165, fontSize: 30, fontWidth: 30, rotation: 0 },
+      // Date — bottom-right
+      { id: 'e3', type: 'expiry-date', x: 252, y: 165, fontSize: 30, fontWidth: 30, rotation: 0, dateFormat: 'MM/DD/YY' },
     ],
   },
 
@@ -87,10 +92,12 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
       numberY: 62, numberFontSize: 22,
     },
     elements: [
-      { id: 'e1', type: 'dow-name',    x: 20, y: 80,  fontSize: 48, fontWidth: 48, rotation: 0 },
-      { id: 'e2', type: 'template-id', x: 20, y: 135, fontSize: 28, fontWidth: 28, rotation: 0 },
-      { id: 'e3', type: 'expiry-date', x: 20, y: 175, fontSize: 48, fontWidth: 48, rotation: 0, dateFormat: 'MM/DD/YY' },
-      { id: 'e4', type: 'item-name',   x: 20, y: 240, fontSize: 28, fontWidth: 28, rotation: 0 },
+      // IX/OX/UX under the boxed current day, along the top
+      { id: 'e1', type: 'template-id', x: 0,   y: 90,  fontSize: 30, fontWidth: 30, rotation: 0, anchorDowDay: true },
+      // Day of week — bottom-left
+      { id: 'e2', type: 'dow-name',    x: 12,  y: 352, fontSize: 40, fontWidth: 40, rotation: 0 },
+      // Date — bottom-right
+      { id: 'e3', type: 'expiry-date', x: 183, y: 348, fontSize: 44, fontWidth: 44, rotation: 0, dateFormat: 'MM/DD/YY' },
     ],
   },
 ]
@@ -101,4 +108,66 @@ export const DEFAULT_LAYOUT_ID = 'builtin-daymark-2x1'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function getLabelSize(key: string): LabelSize {
   return LABEL_SIZES.find(s => s.key === key) ?? LABEL_SIZES[0]
+}
+
+/** Resolve the currently-active label layout (built-in + custom, by saved id). */
+export function loadActiveLayout(): LabelLayout {
+  let custom: LabelLayout[] = []
+  try { custom = JSON.parse(localStorage.getItem(LABEL_LAYOUTS_KEY) ?? '[]') } catch { custom = [] }
+  const activeId = localStorage.getItem(LABEL_ACTIVE_KEY) ?? DEFAULT_LAYOUT_ID
+  return [...BUILTIN_LAYOUTS, ...custom].find(l => l.id === activeId) ?? BUILTIN_LAYOUTS[0]
+}
+
+/**
+ * Quick-item label layout —
+ *   • template (I/O/U)→ under the boxed current day (daymark), along the top
+ *   • item name      → centred horizontally + vertically on the card
+ *   • day of week    → bottom-left
+ *   • expiry date    → bottom-right
+ * Inherits the active layout's size + stock so the Daymark day-of-week strip
+ * still renders. The date is positioned using an estimated text width (date is
+ * a fixed 8 chars); the template id and name are positioned dynamically at
+ * render time (anchorDowDay / centerX).
+ */
+export function buildQuickItemLayout(active: LabelLayout): LabelLayout {
+  const size = getLabelSize(active.sizeKey)
+  const W = size.dotsW
+  const H = size.dotsH
+  const isDaymark = active.stockKey === 'daymark' && !!active.dowConfig
+  const big = size.key === '2x2'
+
+  // Keep the top row clear of the pre-printed Daymark day-of-week strip.
+  const stripBottom = isDaymark && active.dowConfig
+    ? active.dowConfig.numberY + active.dowConfig.numberFontSize
+    : 0
+
+  const nameFs = big ? 40 : 30
+  const idFs   = big ? 34 : 28
+  const dowFs  = big ? 34 : 26
+  const dateFs = big ? 40 : 28
+  const margin = big ? 18 : 12
+  const CW     = 0.6 // approx character width as a fraction of font height
+
+  const topY    = Math.max(margin, stripBottom + (big ? 12 : 8))
+  const bottomY = H - Math.max(dowFs, dateFs) - margin
+  // Centre the name in the band between the template id and the bottom row so
+  // the gap above (to IX) matches the gap below (to the day/date).
+  const nameY   = Math.round((topY + idFs + bottomY - nameFs) / 2)
+  const idX     = Math.round(W - 2 * idFs * CW - margin) // fallback for blank stock
+  const dateX   = Math.round(W - 'MM/DD/YY'.length * dateFs * CW - margin)
+
+  return {
+    id: `quick-${active.id}`,
+    name: 'Quick Item',
+    isBuiltin: true,
+    sizeKey: active.sizeKey,
+    stockKey: active.stockKey,
+    dowConfig: active.dowConfig ? { ...active.dowConfig } : undefined,
+    elements: [
+      { id: 'qi-tpl',  type: 'template-id', x: idX,    y: topY,     fontSize: idFs,   fontWidth: idFs,   rotation: 0, anchorDowDay: true },
+      { id: 'qi-name', type: 'item-name',   x: margin, y: nameY,    fontSize: nameFs, fontWidth: nameFs, rotation: 0, centerX: true, bold: true },
+      { id: 'qi-dow',  type: 'dow-name',    x: margin, y: bottomY,  fontSize: dowFs,  fontWidth: dowFs,  rotation: 0 },
+      { id: 'qi-date', type: 'expiry-date', x: dateX,  y: bottomY,  fontSize: dateFs, fontWidth: dateFs, rotation: 0, dateFormat: 'MM/DD/YY' },
+    ],
+  }
 }

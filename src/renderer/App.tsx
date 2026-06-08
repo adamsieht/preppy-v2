@@ -1,6 +1,7 @@
-import React, { Suspense } from 'react'
+import React, { Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
+import { ACCENT_KEY, applyDowAccent } from './pages/Preppy/constants'
 
 const Preppy        = React.lazy(() => import('./pages/Preppy'))
 const PrintX        = React.lazy(() => import('./pages/PrintX'))
@@ -9,6 +10,15 @@ const Debug         = React.lazy(() => import('./pages/Debug'))
 const Settings      = React.lazy(() => import('./pages/Settings'))
 
 export default function App() {
+  // Keep DOW accent colour in sync with the clock — checks every minute so the
+  // colour switches within 60 s of midnight without requiring an app restart.
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if ((localStorage.getItem(ACCENT_KEY) ?? 'green') === 'dow') applyDowAccent()
+    }, 60_000)
+    return () => clearInterval(iv)
+  }, [])
+
   return (
     <ErrorBoundary>
       <Suspense fallback={<div className="d-flex justify-content-center align-items-center vh-100">Loading…</div>}>

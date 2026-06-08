@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 
-// ── Tailwind class map ──────────────────────────────────────────────────────
-const classes = {
-  wrapper: 'flex items-center gap-3 shrink-0',
-  date:    'text-sm text-[#768390]',
-  time:    'text-sm font-bold text-[#adbac7]',
+interface Props {
+  showSeconds?: boolean
+  timeOnly?:    boolean   // hide the date span; used when date is shown elsewhere
 }
-// ───────────────────────────────────────────────────────────────────────────
 
-export default function Clock() {
+export default function Clock({ showSeconds, timeOnly }: Props) {
   const [now, setNow] = useState(dayjs())
 
   useEffect(() => {
@@ -17,10 +14,16 @@ export default function Clock() {
     return () => clearInterval(timer)
   }, [])
 
+  const timeFmt = showSeconds ? 'h:mm:ss A' : 'h:mm A'
+
   return (
-    <div className={classes.wrapper}>
-      <span className={classes.date}>{now.format('ddd, MMM D')}</span>
-      <span className={classes.time}>{now.format('h:mm A')}</span>
+    <div className="flex items-center gap-3 shrink-0">
+      {!timeOnly && (
+        <span className="text-sm text-[#768390]">{now.format('ddd, MMM D')}</span>
+      )}
+      <span className={`${showSeconds ? 'text-base' : 'text-sm'} font-bold text-[#adbac7] tabular-nums`}>
+        {now.format(timeFmt)}
+      </span>
     </div>
   )
 }

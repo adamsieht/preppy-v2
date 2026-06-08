@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import Label from '../../components/Label'
+import ScaledLabelPreview from '../../components/ScaledLabelPreview'
 import type { LabelTemplate, TemplateHrs } from '../Preppy/types'
+import type { LabelLayout } from '../Preppy/labelTypes'
 import { TEMPLATES, NUMPAD_KEYS } from '../Preppy/constants'
 
 interface PrintQtyPageProps {
@@ -8,11 +10,12 @@ interface PrintQtyPageProps {
   initTemplate: LabelTemplate
   templateHrs?: TemplateHrs   // item mode: switching template also changes duration
   durationHrs:  number        // preset mode: duration is always this value
+  staticLayout?: LabelLayout  // static mode: no template/duration, just qty
   onPrint:      (qty: number, tpl: LabelTemplate) => void
   onClose:      () => void
 }
 
-export default function PrintQtyPage({ label, initTemplate, templateHrs, durationHrs, onPrint, onClose }: PrintQtyPageProps) {
+export default function PrintQtyPage({ label, initTemplate, templateHrs, durationHrs, staticLayout, onPrint, onClose }: PrintQtyPageProps) {
   const [input, setInput] = useState('')
   const [tpl,   setTpl]   = useState<LabelTemplate>(initTemplate)
 
@@ -42,23 +45,27 @@ export default function PrintQtyPage({ label, initTemplate, templateHrs, duratio
 
       <div className="flex-1 flex flex-col items-center justify-around px-6 py-4 max-w-sm mx-auto w-full min-h-0">
 
-        {/* Template switcher */}
-        <div className="flex gap-3 shrink-0">
-          {TEMPLATES.map(t => (
-            <button
-              key={t}
-              onClick={() => setTpl(t)}
-              className={`px-6 py-2 rounded-full font-bold text-sm border transition-colors cursor-pointer ${
-                tpl === t
-                  ? 'bg-[#28a745] border-[#28a745] text-white'
-                  : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681] hover:text-white'
-              }`}
-            >{t}</button>
-          ))}
-        </div>
+        {/* Template switcher — hidden in static mode (no template) */}
+        {!staticLayout && (
+          <div className="flex gap-3 shrink-0">
+            {TEMPLATES.map(t => (
+              <button
+                key={t}
+                onClick={() => setTpl(t)}
+                className={`px-6 py-2 rounded-full font-bold text-sm border transition-colors cursor-pointer ${
+                  tpl === t
+                    ? 'bg-[#28a745] border-[#28a745] text-white'
+                    : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681] hover:text-white'
+                }`}
+              >{t}</button>
+            ))}
+          </div>
+        )}
 
         <div className="shrink-0">
-          <Label durationHrs={resolvedHrs} type={tpl} />
+          {staticLayout
+            ? <div className="w-[220px] h-[120px]"><ScaledLabelPreview layout={staticLayout} values={{ template: 'IX', durationHrs: 0 }} /></div>
+            : <Label durationHrs={resolvedHrs} type={tpl} />}
         </div>
 
         <div className="flex flex-col items-center gap-2 shrink-0">

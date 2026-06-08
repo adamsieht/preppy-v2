@@ -164,3 +164,58 @@ export function print(args: PrintArgs): PrintResult {
   logInfo(`${simulating ? '[SIMULATE] ' : ''}Print job complete: ${args.qty}x ${args.template}`)
   return { success: true, simulated: simulating, simulatedPath: lastSimPath || undefined }
 }
+
+export interface PrintRawArgs {
+  zpl: string
+  qty: number
+}
+
+/**
+ * Print a pre-generated ZPL document (used by static presets). Applies the
+ * configured label-home offset and honours simulate mode, but does NOT run
+ * fillTemplate (the ZPL is already complete) and does NOT log to the print-job
+ * history (static jobs carry no template/duration).
+ */
+export function printRaw(args: PrintRawArgs): PrintResult {
+  const config = getConfig()
+  const filled = injectLabelHome(
+    args.zpl,
+    config.printer.labelhomeX ?? 0,
+    config.printer.labelhomeY ?? 0,
+  )
+
+  const deviceExists = fs.existsSync(config.printer.device)
+  const simulating = config.printer.simulate || !deviceExists
+  if (simulating && !config.printer.simulate) {
+    logWarn(`Printer device ${config.printer.device} not found — falling back to simulate mode`)
+  }
+
+  const simDir = path.join(process.cwd(), 'simulated-labels')
+  if (simulating) fs.mkdirSync(simDir, { recursive: true })
+
+  const timestamp = dayjs().format('YYYY-MM-DD_HH-mm-ss')
+  let lastSimPath = ''
+
+  logInfo(`${simulating ? '[SIMULATE] ' : ''}Printing ${args.qty}x static label`)
+
+  for (let i = 0; i < args.qty; i++) {
+    try {
+      if (simulating) {
+        const outPath = path.join(simDir, `${timestamp}_STATIC_${i + 1}of${args.qty}.zpl`)
+        fs.writeFileSync(outPath, filled)
+        lastSimPath = outPath
+        logDebug(`[SIMULATE] Static label ${i + 1}/${args.qty} written to ${outPath}`)
+      } else {
+        fs.writeFileSync(config.printer.device, filled)
+        logDebug(`Static label ${i + 1}/${args.qty} sent to ${config.printer.device}`)
+      }
+    } catch (err) {
+      const error = `Failed to write static label ${i + 1}: ${String(err)}`
+      logError(error)
+      return { success: false, error }
+    }
+  }
+
+  logInfo(`${simulating ? '[SIMULATE] ' : ''}Static print job complete: ${args.qty}x`)
+  return { success: true, simulated: simulating, simulatedPath: lastSimPath || undefined }
+}

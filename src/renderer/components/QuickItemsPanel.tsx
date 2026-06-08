@@ -1,14 +1,29 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs, ActiveLogEntry } from '../pages/Preppy/types'
-import { ITEM_CATEGORIES, CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY, PROMPT_HRS, PRINT_COUNTS_KEY, HOURLY_COUNTS_KEY, FAVORITES_KEY } from '../pages/Preppy/constants'
+import { ITEM_CATEGORIES, CATS_KEY, HIDDEN_CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY, PROMPT_HRS, PRINT_COUNTS_KEY, HOURLY_COUNTS_KEY, FAVORITES_KEY, QUICK_SORT_FIELD_KEY, QUICK_SORT_DIR_KEY, QUICK_CARD_STYLE_KEY } from '../pages/Preppy/constants'
+import type { QuickSortField, QuickCardStyle } from '../pages/Preppy/constants'
 import { loadItems, loadStored, loadUserCats, persist, fmtDuration, fmtExpiry, timeAgo, getCat } from '../pages/Preppy/utils'
-import { PencilIcon, StarIcon } from './Icons'
+import { loadActiveLayout, buildQuickItemLayout } from '../pages/Preppy/labelDefs'
+import { PencilIcon, StarIcon, TrashIcon } from './Icons'
+import ScaledLabelPreview from './ScaledLabelPreview'
 import AddEditItemPage from '../pages/AddEditItemPage'
 import AddBundlePage from '../pages/AddBundlePage'
 import DatePromptPage from './DatePromptPage'
 import { classes } from './QuickItemsPanel.styles'
 
-type SortField = 'name' | 'cat' | 'recent' | 'popular' | 'recommended'
+type SortField = QuickSortField
+
+const VALID_SORTS: SortField[] = ['name', 'cat', 'recent', 'popular', 'recommended']
+function loadSortField(): SortField {
+  const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as SortField | null
+  return v && VALID_SORTS.includes(v) ? v : 'popular'
+}
+function loadSortAsc(): boolean {
+  return (localStorage.getItem(QUICK_SORT_DIR_KEY) ?? 'desc') === 'asc'
+}
+function loadCardStyle(): QuickCardStyle {
+  return localStorage.getItem(QUICK_CARD_STYLE_KEY) === 'label' ? 'label' : 'standard'
+}
 
 function mergeEntries(entries: ActiveLogEntry[]): ActiveLogEntry[] {
   const groups = new Map<string, ActiveLogEntry[]>()
@@ -42,10 +57,14 @@ interface PanelProps {
 export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, durationOptions, collapsed, onToggleCollapse, printSignal, isEditing }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
   const [userCats,      setUserCats]      = useState<CategoryDef[]>(() => loadUserCats())
+  const [hiddenCats,    setHiddenCats]    = useState<string[]>(() => loadStored(HIDDEN_CATS_KEY))
   const [tab,           setTab]           = useState<'items' | 'bundles' | 'recent'>('items')
-  const [sortField,     setSortField]     = useState<SortField>('name')
-  const [sortAsc,       setSortAsc]       = useState(true)
-  const [filterCats,    setFilterCats]    = useState<Set<string>>(new Set())
+  const [sortField]     = useState<SortField>(loadSortField)
+  const [sortAsc]       = useState(loadSortAsc)
+  const [cardStyle]     = useState<QuickCardStyle>(loadCardStyle)
+  const [activeLayout]  = useState(loadActiveLayout)
+  const quickLayout     = useMemo(() => buildQuickItemLayout(activeLayout), [activeLayout])
+  const [filterCat,     setFilterCat]     = useState<string | null>(null)
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [favorites,     setFavorites]     = useState<Set<string>>(() => { try { return new Set<string>(JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? '[]')) } catch { return new Set() } })
   const [printCounts,   setPrintCounts]   = useState<Record<string, number>>(() => { try { return JSON.parse(localStorage.getItem(PRINT_COUNTS_KEY) ?? '{}') } catch { return {} } })
@@ -83,15 +102,18 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
       .finally(() => setRecentLoading(false))
   }, [tab, printSignal])
 
-  const allCats     = [...ITEM_CATEGORIES, ...userCats].filter((c, i, a) => a.findIndex(x => x.id === c.id) === i)
+  const hiddenCatSet = new Set(hiddenCats)
+  const allCats     = [...ITEM_CATEGORIES, ...userCats]
+    .filter((c, i, a) => a.findIndex(x => x.id === c.id) === i)
+    .filter(c => c.id === 'item' || !hiddenCatSet.has(c.id))
   const singleItems = items.filter((i): i is QuickSingleItem => i.type === 'item')
   const bundleItems = items.filter(i => i.type === 'bundle')
 
   const visibleItems = (() => {
     let list = showFavoritesOnly
       ? singleItems.filter(i => favorites.has(i.id))
-      : filterCats.size > 0
-        ? singleItems.filter(i => filterCats.has(i.category ?? 'item'))
+      : filterCat
+        ? singleItems.filter(i => (i.category ?? 'item') === filterCat)
         : singleItems
     const hour = new Date().getHours()
     return [...list].sort((a, b) => {
@@ -123,6 +145,33 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     const next = [...userCats, cat]
     setUserCats(next)
     persist(CATS_KEY, next)
+  }
+
+  // Remove the currently-selected category. Items in it fall back to 'item'.
+  // The built-in 'item' category can never be removed. Custom categories are
+  // deleted outright; built-in ones (veggie/meat/sauce) are hidden.
+  function removeSelectedCategory() {
+    const catId = filterCat
+    if (!catId || catId === 'item') return
+
+    const nextItems = items.map(i =>
+      i.type === 'item' && (i.category ?? 'item') === catId
+        ? { ...i, category: 'item' }
+        : i,
+    )
+    setItems(nextItems)
+    persist(ITEMS_KEY, nextItems)
+
+    const nextUserCats = userCats.filter(c => c.id !== catId)
+    if (nextUserCats.length !== userCats.length) {
+      setUserCats(nextUserCats)
+      persist(CATS_KEY, nextUserCats)
+    } else {
+      const nextHidden = [...hiddenCats, catId]
+      setHiddenCats(nextHidden)
+      persist(HIDDEN_CATS_KEY, nextHidden)
+    }
+    setFilterCat(null)
   }
 
   function addItem(name: string, cat: string, hrs: TemplateHrs) {
@@ -245,26 +294,16 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
   return (
     <>
       <div className={classes.panel} ref={panelRef}>
-        {/* Header */}
-        <div className={classes.panelHead}>
-          <span className={classes.panelTitle}>Quick Items</span>
-          <div className="flex items-center gap-2">
-            <span className={classes.panelCount}>
-              {singleItems.length} item{singleItems.length !== 1 ? 's' : ''}{bundleItems.length > 0 ? ` · ${bundleItems.length} bundle${bundleItems.length !== 1 ? 's' : ''}` : ''}
-            </span>
-            <button
-              onClick={onToggleCollapse}
-              title="Collapse panel"
-              className="w-7 h-7 flex items-center justify-center rounded text-[#6e7681] hover:text-white hover:bg-[#21262d] cursor-pointer bg-transparent border-0 transition-colors text-[16px] leading-none"
-            >‹</button>
-          </div>
-        </div>
-
-        {/* Tabs */}
+        {/* Tabs + collapse button */}
         <div className={classes.panelTabBar}>
           <button className={classes.panelTab(tab === 'items')}   onClick={() => setTab('items')}>Items</button>
           <button className={classes.panelTab(tab === 'bundles')} onClick={() => setTab('bundles')}>Bundles</button>
           <button className={classes.panelTab(tab === 'recent')}  onClick={() => setTab('recent')}>Recent</button>
+          <button
+            onClick={onToggleCollapse}
+            title="Collapse panel"
+            className="w-9 shrink-0 flex items-center justify-center text-[#6e7681] hover:text-white hover:bg-[#21262d] cursor-pointer bg-transparent border-0 border-b-2 border-transparent transition-colors text-[16px] leading-none"
+          >‹</button>
         </div>
 
         {/* ── Items tab ── */}
@@ -275,49 +314,34 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
               {/* Category filter pills — wrap freely */}
               <div className="flex flex-wrap gap-1 flex-1 min-w-0">
                 <button
-                  className={classes.filterPill(filterCats.size === 0)}
-                  onClick={() => setFilterCats(new Set())}
+                  className={classes.filterPill(filterCat === null)}
+                  onClick={() => setFilterCat(null)}
                 >All</button>
                 {allCats.map(cat => {
-                  const active = filterCats.has(cat.id)
+                  const active = filterCat === cat.id
                   return (
                     <button
                       key={cat.id}
                       className={classes.filterPill(active)}
                       style={active ? {} : { borderColor: cat.color + '55', color: cat.color }}
-                      onClick={() => setFilterCats(prev => {
-                        const next = new Set(prev)
-                        if (next.has(cat.id)) next.delete(cat.id)
-                        else next.add(cat.id)
-                        return next
-                      })}
+                      onClick={() => setFilterCat(cat.id)}
                     >{cat.label}</button>
                   )
                 })}
               </div>
-              {/* Sort controls + favorites filter — fixed to right */}
+              {/* Favorites filter + remove-category — fixed to right (sort moved to Settings → General) */}
               <div className="shrink-0 flex items-center gap-1">
+                <button
+                  onClick={removeSelectedCategory}
+                  disabled={!filterCat || filterCat === 'item'}
+                  title={filterCat && filterCat !== 'item' ? 'Remove selected category (items become "Item")' : 'Select a category to remove'}
+                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-[#30363d] bg-transparent text-[#6e7681] hover:text-[#f85149] hover:border-[#f85149] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#6e7681] disabled:hover:border-[#30363d]"
+                ><TrashIcon /></button>
                 <button
                   onClick={() => setShowFavoritesOnly(prev => !prev)}
                   title={showFavoritesOnly ? 'Showing favorites — click to show all' : 'Filter to favorites'}
                   className={`w-7 h-7 shrink-0 flex items-center justify-center rounded border cursor-pointer transition-colors ${showFavoritesOnly ? 'border-[#e3b341] bg-[#e3b341] text-white' : 'border-[#30363d] bg-transparent text-[#6e7681] hover:text-[#e3b341] hover:border-[#e3b341]'}`}
                 ><StarIcon filled={showFavoritesOnly} /></button>
-                <select
-                  value={sortField}
-                  onChange={e => { const f = e.target.value as SortField; setSortField(f); setSortAsc(f !== 'recent' && f !== 'popular' && f !== 'recommended') }}
-                  className="w-[130px] bg-[#161b22] border border-[#30363d] rounded px-2 py-[5px] text-white text-xs outline-none cursor-pointer hover:border-[#6e7681] transition-colors"
-                >
-                  <option value="name">Name</option>
-                  <option value="cat">Category</option>
-                  <option value="recent">Recently Added</option>
-                  <option value="popular">Most Popular</option>
-                  <option value="recommended">Recommended</option>
-                </select>
-                <button
-                  onClick={() => setSortAsc(prev => !prev)}
-                  title={sortAsc ? 'Ascending — click to reverse' : 'Descending — click to reverse'}
-                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-[#30363d] bg-transparent text-[#adbac7] hover:text-white hover:border-[#6e7681] cursor-pointer transition-colors text-sm font-bold"
-                >{sortAsc ? '↑' : '↓'}</button>
               </div>
             </div>
 
@@ -328,75 +352,134 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                   <span>{singleItems.length === 0 ? (isEditing ? 'Use the button below to add your first item' : 'Enter Edit mode to add items') : 'Try a different category filter'}</span>
                 </div>
               </div>
-            ) : isWide ? (
-              /* ── Grid mode (panel wider than half the screen) ── */
-              <div className={classes.panelGrid(isEditing ?? false)}>
-                {visibleItems.map(item => {
-                  const cat = getCat(item.category ?? 'item', userCats)
-                  return (
-                    <div key={item.id} className={classes.gridCard}>
-                      <div className={classes.gridCardHead}>
-                        <span
-                          className={classes.catBadge}
-                          style={{ color: cat.color, borderColor: cat.color + '66' }}
-                        >{cat.label}</span>
-                        <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
-                        <button onClick={() => toggleFavorite(item.id)} className={`${classes.gridCardIconBtn} ${favorites.has(item.id) ? 'text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
-                        {isEditing && <button onClick={() => setEditingItem(item)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#58a6ff]`} title="Edit"><PencilIcon /></button>}
-                        {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
+            ) : cardStyle === 'label' ? (
+              /* ── Label-preview card style (mirrors left-column presets) ── */
+              <div className="relative flex-1 min-h-0 flex flex-col">
+                <div className={classes.panelGridLabel(isEditing ?? false)}>
+                  {visibleItems.map(item => {
+                    const isPrompt   = item.hrs[template] === PROMPT_HRS
+                    const previewHrs = isPrompt ? 24 : item.hrs[template]
+                    return (
+                      <div key={item.id} className={`${classes.labelCard} group`}>
+                        <div className="relative flex-1 min-h-0 bg-[#090c10] p-1.5">
+                          <ScaledLabelPreview layout={quickLayout} values={{ template, durationHrs: previewHrs, itemName: item.name }} />
+                          {/* Persistent favorite indicator (hidden while hovering to reveal actions) */}
+                          {favorites.has(item.id) && (
+                            <div className="absolute top-1 right-1 text-[#e3b341] group-hover:opacity-0 transition-opacity pointer-events-none"><StarIcon filled /></div>
+                          )}
+                          {/* Action icons — revealed on hover so they don't cover the label */}
+                          <div className="absolute top-0 right-0 flex items-center gap-[1px] rounded-bl bg-[#0d1117]/85 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => toggleFavorite(item.id)} className={`${classes.gridCardIconBtn} ${favorites.has(item.id) ? 'text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
+                            {isEditing && <button onClick={() => setEditingItem(item)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#58a6ff]`} title="Edit"><PencilIcon /></button>}
+                            {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
+                          </div>
+                        </div>
+                        <div className={classes.gridCardBtns}>
+                          {isPrompt ? (
+                            <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
+                          ) : (
+                            <>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
+                              <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className={classes.gridCardMeta}>
-                        IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
-                      </div>
-                      <div className={classes.gridCardBtns}>
-                        {item.hrs[template] === PROMPT_HRS ? (
-                          <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
-                        ) : (
-                          <>
-                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
-                            <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
-                            <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
+                <div className="absolute bottom-2 right-2 text-[#6e7681] text-[10px] font-semibold pointer-events-none select-none bg-[#0d1117]/80 px-1.5 py-0.5 rounded">
+                  {singleItems.length} item{singleItems.length !== 1 ? 's' : ''}{bundleItems.length > 0 ? ` · ${bundleItems.length} bundle${bundleItems.length !== 1 ? 's' : ''}` : ''}
+                </div>
               </div>
             ) : (
-              /* ── List mode ── */
-              <div className={classes.panelList}>
-                {visibleItems.map(item => {
-                  const cat = getCat(item.category ?? 'item', userCats)
-                  return (
-                    <div key={item.id} className={classes.itemRow}>
-                      <div className={classes.itemInfo}>
-                        <div className="flex items-center">
-                          <span
-                            className={classes.catBadge}
-                            style={{ color: cat.color, borderColor: cat.color + '66' }}
-                          >{cat.label}</span>
-                          <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+              <div className="relative flex-1 min-h-0 flex flex-col">
+                {isWide ? (
+                  /* ── Grid mode (panel wider than half the screen) ── */
+                  <div className={classes.panelGrid(isEditing ?? false)}>
+                    {visibleItems.map(item => {
+                      const cat = getCat(item.category ?? 'item', userCats)
+                      return (
+                        <div key={item.id} className={classes.gridCard}>
+                          {/* Top row: category badge (left) · actions + favorite (right) */}
+                          <div className="flex items-center justify-between gap-1 pl-2 pr-1 pt-[3px]">
+                            <span
+                              className={`${classes.catBadge} mr-0`}
+                              style={{ color: cat.color, borderColor: cat.color + '66' }}
+                            >{cat.label}</span>
+                            <div className="flex items-center gap-[1px] shrink-0">
+                              {isEditing && <button onClick={() => setEditingItem(item)} className={`${classes.gridCardIconBtnSm} text-[#6e7681] hover:text-[#58a6ff]`} title="Edit"><PencilIcon /></button>}
+                              {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtnSm} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
+                              <button onClick={() => toggleFavorite(item.id)} className={`${classes.gridCardIconBtnSm} ${favorites.has(item.id) ? 'text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
+                            </div>
+                          </div>
+                          {/* Centred item name — fills the middle and wraps when needed.
+                              No mt-auto on the buttons below, so this flex-1 actually grows.
+                              pb nudges it up so top/bottom whitespace looks even. */}
+                          <div className="flex-1 flex items-center justify-center px-2 pb-3 min-h-0 overflow-hidden">
+                            <span className="text-white text-sm font-semibold text-center leading-snug break-words line-clamp-3">{item.name}</span>
+                          </div>
+                          <div className={`${classes.gridCardMeta} text-center`}>
+                            IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                          </div>
+                          {/* Print buttons are hidden in edit mode so the name has room */}
+                          {!isEditing && (
+                            <div className="flex gap-1 px-2 pb-2 pt-1">
+                              {item.hrs[template] === PROMPT_HRS ? (
+                                <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
+                              ) : (
+                                <>
+                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
+                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
+                                  <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className={classes.itemDur}>
-                          IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                      )
+                    })}
+                  </div>
+                ) : (
+                  /* ── List mode ── */
+                  <div className={classes.panelList}>
+                    {visibleItems.map(item => {
+                      const cat = getCat(item.category ?? 'item', userCats)
+                      return (
+                        <div key={item.id} className={classes.itemRow}>
+                          <div className={classes.itemInfo}>
+                            <div className="flex items-center">
+                              <span
+                                className={classes.catBadge}
+                                style={{ color: cat.color, borderColor: cat.color + '66' }}
+                              >{cat.label}</span>
+                              <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+                            </div>
+                            <div className={classes.itemDur}>
+                              IX {fmtDuration(item.hrs.IX)} · OX {fmtDuration(item.hrs.OX)} · UX {fmtDuration(item.hrs.UX)}
+                            </div>
+                          </div>
+                          {item.hrs[template] === PROMPT_HRS ? (
+                            <button onClick={() => setDatePromptItem(item)} className={classes.itemBtn(true)}>📅 Date</button>
+                          ) : (
+                            <>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
+                              <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
+                            </>
+                          )}
+                          <button onClick={() => toggleFavorite(item.id)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors opacity-0 group-hover:opacity-100 ${favorites.has(item.id) ? 'opacity-100 text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
+                          {isEditing && <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>}
+                          {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
                         </div>
-                      </div>
-                      {item.hrs[template] === PROMPT_HRS ? (
-                        <button onClick={() => setDatePromptItem(item)} className={classes.itemBtn(true)}>📅 Date</button>
-                      ) : (
-                        <>
-                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
-                          <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
-                          <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
-                        </>
-                      )}
-                      <button onClick={() => toggleFavorite(item.id)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors opacity-0 group-hover:opacity-100 ${favorites.has(item.id) ? 'opacity-100 text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
-                      {isEditing && <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>}
-                      {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="absolute bottom-2 right-2 text-[#6e7681] text-[10px] font-semibold pointer-events-none select-none bg-[#0d1117]/80 px-1.5 py-0.5 rounded">
+                  {singleItems.length} item{singleItems.length !== 1 ? 's' : ''}{bundleItems.length > 0 ? ` · ${bundleItems.length} bundle${bundleItems.length !== 1 ? 's' : ''}` : ''}
+                </div>
               </div>
             )}
 
@@ -427,49 +510,56 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                   <span>Bundles let you print multiple labels at once for a full prep session</span>
                 </div>
               </div>
-            ) : isWide ? (
-              /* ── Grid mode ── */
-              <div className={classes.panelGrid(isEditing ?? false)}>
-                {bundleItems.map(item => {
-                  if (item.type !== 'bundle') return null
-                  const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                  const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
-                  return (
-                    <div key={item.id} className={classes.gridCard}>
-                      <div className={classes.gridCardHead}>
-                        <span className={classes.bundleBadge}>BUNDLE</span>
-                        <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
-                        {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
-                      </div>
-                      <div className={classes.gridCardMeta}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
-                      <div className={classes.gridCardBtns}>
-                        <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.gridCardBtn(true)}>Print</button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
             ) : (
-              /* ── List mode ── */
-              <div className={classes.panelList}>
-                {bundleItems.map(item => {
-                  if (item.type !== 'bundle') return null
-                  const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                  const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
-                  return (
-                    <div key={item.id} className={classes.itemRow}>
-                      <div className={classes.itemInfo}>
-                        <div className="flex items-center">
-                          <span className={classes.bundleBadge}>BUNDLE</span>
-                          <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+              <div className="relative flex-1 min-h-0 flex flex-col">
+                {isWide ? (
+                  /* ── Grid mode ── */
+                  <div className={classes.panelGrid(isEditing ?? false)}>
+                    {bundleItems.map(item => {
+                      if (item.type !== 'bundle') return null
+                      const total   = item.entries.reduce((s, e) => s + e.qty, 0)
+                      const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
+                      return (
+                        <div key={item.id} className={classes.gridCard}>
+                          <div className={classes.gridCardHead}>
+                            <span className={classes.bundleBadge}>BUNDLE</span>
+                            <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
+                            {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
+                          </div>
+                          <div className={classes.gridCardMeta}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
+                          <div className={classes.gridCardBtns}>
+                            <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.gridCardBtn(true)}>Print</button>
+                          </div>
                         </div>
-                        <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
-                      </div>
-                      <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
-                      {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                ) : (
+                  /* ── List mode ── */
+                  <div className={classes.panelList}>
+                    {bundleItems.map(item => {
+                      if (item.type !== 'bundle') return null
+                      const total   = item.entries.reduce((s, e) => s + e.qty, 0)
+                      const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
+                      return (
+                        <div key={item.id} className={classes.itemRow}>
+                          <div className={classes.itemInfo}>
+                            <div className="flex items-center">
+                              <span className={classes.bundleBadge}>BUNDLE</span>
+                              <span className={`${classes.itemName} flex-1`}>{item.name}</span>
+                            </div>
+                            <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
+                          </div>
+                          <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
+                          {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="absolute bottom-2 right-2 text-[#6e7681] text-[10px] font-semibold pointer-events-none select-none bg-[#0d1117]/80 px-1.5 py-0.5 rounded">
+                  {bundleItems.length} bundle{bundleItems.length !== 1 ? 's' : ''}
+                </div>
               </div>
             )}
 
@@ -705,7 +795,6 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
           itemName={datePromptItem.name}
           template={template}
           onPrint={(hrs, qty) => { logActive(datePromptItem.name, datePromptItem.category, template, hrs, qty); onPrint(hrs, qty) }}
-          onCustomPrint={(hrs, label) => onCustomPrint({ IX: hrs, OX: hrs, UX: hrs }, label)}
           onClose={() => setDatePromptItem(null)}
         />
       )}

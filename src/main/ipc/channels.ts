@@ -1,5 +1,6 @@
 export const IPC = {
   PRINTER_PRINT:      'printer:print',
+  PRINTER_PRINT_ZPL:  'printer:print-zpl',
   PRINTER_PREVIEW:    'printer:preview',
   PRINTER_HISTORY:    'printer:history',
   PRINTER_SCAN:           'printer:scan',

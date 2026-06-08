@@ -37,8 +37,8 @@ export default function PageLayout({ title, back, right, children, footer, noPad
           </button>
         )}
         <span className={classes.title}>{title}</span>
-        {location.pathname !== '/debug' && (
-          <button onClick={() => navigate('/debug')} className={classes.cogBtn} title="Settings">
+        {location.pathname !== '/settings' && location.pathname !== '/debug' && (
+          <button onClick={() => navigate('/settings')} className={classes.cogBtn} title="Settings">
             ⚙
           </button>
         )}

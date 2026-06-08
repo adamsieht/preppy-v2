@@ -464,34 +464,6 @@ export default function Preppy() {
               {id}
             </button>
           ))}
-          {editMode && (
-            <button
-              onClick={restoreDefaults}
-              className="px-3 py-3 min-h-[52px] text-sm font-bold text-[#6e7681] border-b-2 border-[#30363d] hover:text-white hover:border-[#6e7681] bg-transparent cursor-pointer shrink-0 transition-colors"
-            >
-              ↩ Restore
-            </button>
-          )}
-          {editMode && (
-            <select
-              value={editSort}
-              onChange={e => handleSort(e.target.value)}
-              className={classes.sortSelect}
-            >
-              <option value="">Sort…</option>
-              <option value="asc">Time ↑</option>
-              <option value="desc">Time ↓</option>
-              <option value="popular">Popular</option>
-            </select>
-          )}
-          {editMode && (
-            <button
-              onClick={() => setShowAddPreset(true)}
-              className={classes.newBtn}
-            >
-              + New
-            </button>
-          )}
           <button
             onClick={() => setEditMode(m => !m)}
             className={classes.editBtn(editMode)}
@@ -622,6 +594,32 @@ export default function Preppy() {
                 template={template}
                 onPrint={handlePrint}
               />
+            )}
+
+            {/* ── Edit mode floating toolbar — bottom-left of preset area ── */}
+            {editMode && (
+              <div className="absolute bottom-4 left-4 z-[100] flex items-center gap-1 bg-[#161b22] border border-[#30363d] rounded-xl px-3 py-[7px] shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+                <button
+                  onClick={restoreDefaults}
+                  className="text-sm font-bold text-[#6e7681] hover:text-white bg-transparent border-0 cursor-pointer transition-colors px-2 py-1 rounded hover:bg-[#21262d]"
+                >↩ Restore</button>
+                <div className="w-px h-4 bg-[#30363d] shrink-0" />
+                <select
+                  value={editSort}
+                  onChange={e => handleSort(e.target.value)}
+                  className="text-sm font-bold text-[#6e7681] bg-transparent border-0 cursor-pointer outline-none hover:text-white transition-colors px-1 py-1"
+                >
+                  <option value="">Sort…</option>
+                  <option value="asc">Time ↑</option>
+                  <option value="desc">Time ↓</option>
+                  <option value="popular">Popular</option>
+                </select>
+                <div className="w-px h-4 bg-[#30363d] shrink-0" />
+                <button
+                  onClick={() => setShowAddPreset(true)}
+                  className="text-sm font-bold text-[#28a745] bg-transparent border-0 cursor-pointer transition-colors px-2 py-1 rounded hover:bg-[#28a745]/10"
+                >+ New</button>
+              </div>
             )}
 
             {/* ── Print toasts — anchored inside left column, left of panel ── */}

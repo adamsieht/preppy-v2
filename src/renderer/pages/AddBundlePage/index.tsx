@@ -105,6 +105,41 @@ export default function AddBundlePage({ quickItems, durationOptions, onAdd, onCl
             </div>
           )}
 
+          {/* Custom entry */}
+          <div>
+            <div className={styles.sectionLbl}>Add Custom Entry</div>
+            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col gap-2">
+              {/* Template + duration row */}
+              <div className="flex gap-2">
+                <div className="flex flex-col gap-[3px] shrink-0">
+                  <span className="text-[#6e7681] text-[9px] text-center font-semibold uppercase tracking-wide">Template</span>
+                  <div className="flex gap-1">
+                    {TEMPLATES.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setCTemplate(t)}
+                        className={`px-2 py-[5px] rounded text-[10px] font-bold border cursor-pointer transition-colors ${cTemplate === t ? 'bg-[#28a745] border-[#28a745] text-white' : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681]'}`}
+                      >{t}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1 flex flex-col gap-[3px]">
+                  <span className="text-[#6e7681] text-[9px] font-semibold uppercase tracking-wide">Duration</span>
+                  <select value={cHrs} onChange={e => setCHrs(Number(e.target.value))} className={styles.selectCls}>
+                    {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[#6e7681] text-xs">Qty</span>
+                <button onClick={() => setCQty(q => Math.max(1, q - 1))} className={styles.qtyBtn}>−</button>
+                <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{cQty}</span>
+                <button onClick={() => setCQty(q => Math.min(99, q + 1))} className={styles.qtyBtn}>+</button>
+                <button onClick={addCustomEntry} className="ml-auto px-4 py-[6px] rounded bg-[#28a745] border-0 text-white text-xs font-bold cursor-pointer hover:bg-[#2ea043] transition-colors">+ Add</button>
+              </div>
+            </div>
+          </div>
+
           {/* From quick items */}
           {quickItems.length > 0 && (
             <div>
@@ -142,41 +177,6 @@ export default function AddBundlePage({ quickItems, durationOptions, onAdd, onCl
               </div>
             </div>
           )}
-
-          {/* Custom entry */}
-          <div>
-            <div className={styles.sectionLbl}>Add Custom Entry</div>
-            <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-3 flex flex-col gap-2">
-              {/* Template + duration row */}
-              <div className="flex gap-2">
-                <div className="flex flex-col gap-[3px] shrink-0">
-                  <span className="text-[#6e7681] text-[9px] text-center font-semibold uppercase tracking-wide">Template</span>
-                  <div className="flex gap-1">
-                    {TEMPLATES.map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setCTemplate(t)}
-                        className={`px-2 py-[5px] rounded text-[10px] font-bold border cursor-pointer transition-colors ${cTemplate === t ? 'bg-[#28a745] border-[#28a745] text-white' : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681]'}`}
-                      >{t}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex-1 flex flex-col gap-[3px]">
-                  <span className="text-[#6e7681] text-[9px] font-semibold uppercase tracking-wide">Duration</span>
-                  <select value={cHrs} onChange={e => setCHrs(Number(e.target.value))} className={styles.selectCls}>
-                    {durationOptions.map(o => <option key={o.hrs} value={o.hrs}>{o.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[#6e7681] text-xs">Qty</span>
-                <button onClick={() => setCQty(q => Math.max(1, q - 1))} className={styles.qtyBtn}>−</button>
-                <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{cQty}</span>
-                <button onClick={() => setCQty(q => Math.min(99, q + 1))} className={styles.qtyBtn}>+</button>
-                <button onClick={addCustomEntry} className="ml-auto px-4 py-[6px] rounded bg-[#28a745] border-0 text-white text-xs font-bold cursor-pointer hover:bg-[#2ea043] transition-colors">+ Add</button>
-              </div>
-            </div>
-          </div>
 
         </div>
       </div>

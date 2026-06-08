@@ -48,3 +48,21 @@ input, select, textarea { touch-action: manipulation; }
 
 /* Prevent double-tap zoom on buttons */
 button { touch-action: manipulation; }
+
+/* Dark theme for the on-screen keyboard inside Settings (Network tab) */
+.settings-keyboard .simple-keyboard.hg-theme-default {
+  background: transparent;
+  padding: 0;
+}
+.settings-keyboard .hg-button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-bottom-width: 1px;
+  color: #e6edf3;
+  box-shadow: none;
+}
+.settings-keyboard .hg-button:active,
+.settings-keyboard .hg-button.hg-activeButton {
+  background: #28a745;
+  color: #fff;
+}

@@ -136,28 +136,16 @@ export default function Debug() {
   )
 
   return (
-    <PageLayout title="Settings" back right={headerRight} noPad>
+    <PageLayout title="Diagnostics" back="/settings" right={headerRight} noPad>
       <div className="flex flex-col h-full">
 
         {/* Quick navigation */}
         <div className="flex gap-2 px-4 py-3 border-b border-[#dee2e6] bg-[#f8f9fa] shrink-0">
-          <button onClick={() => navigate('/preppy-settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
-            Preppy Settings
-          </button>
-          <button onClick={() => navigate('/printer-setup')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
-            Printer Setup
+          <button onClick={() => navigate('/settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
+            ← Settings
           </button>
           <button onClick={() => navigate('/reports')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
             Reports
-          </button>
-          <button onClick={() => navigate('/wifi')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
-            WiFi
-          </button>
-          <button onClick={() => navigate('/label-calibration')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
-            Label Calibration
-          </button>
-          <button onClick={() => navigate('/datetime-settings')} className="border border-[#dee2e6] text-[#495057] bg-white rounded px-4 py-2 text-sm font-medium cursor-pointer hover:bg-[#e9ecef]">
-            Date &amp; Time
           </button>
         </div>
 

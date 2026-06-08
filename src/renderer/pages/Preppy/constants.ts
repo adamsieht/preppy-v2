@@ -57,5 +57,10 @@ export const PANEL_COLLAPSED_KEY = 'preppy-panel-collapsed'
 export const LEFT_COLLAPSED_KEY  = 'preppy-left-collapsed'
 export const ACTIVE_LOG_KEY      = 'preppy-active-log'
 export const RECENT_CLEARED_KEY  = 'preppy-recent-cleared'
+export const PRINT_COUNTS_KEY    = 'preppy-print-counts'
+export const HOURLY_COUNTS_KEY   = 'preppy-hourly-counts'
+export const FAVORITES_KEY       = 'preppy-favorites'
+export const LABEL_LAYOUTS_KEY    = 'preppy-label-layouts'
+export const LABEL_ACTIVE_KEY     = 'preppy-label-active'
 
 export const NUMPAD_KEYS = ['7','8','9','4','5','6','1','2','3','⌫','0','✓'] as const

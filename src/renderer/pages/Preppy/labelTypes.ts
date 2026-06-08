@@ -61,8 +61,6 @@ export interface LabelLayout {
   dowConfig?: DowStripConfig   // only when stockKey === 'daymark'
 }
 
-export type TemplateAssignments = Record<'IX' | 'OX' | 'UX', string>
-
 /** Runtime values passed to ZPL/preview generators */
 export interface LabelValues {
   template:    'IX' | 'OX' | 'UX'

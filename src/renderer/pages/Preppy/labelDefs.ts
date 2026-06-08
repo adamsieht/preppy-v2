@@ -95,12 +95,8 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
   },
 ]
 
-// Default assignments: IX/OX/UX each default to the daymark 2×1
-export const DEFAULT_ASSIGNMENTS: Record<'IX' | 'OX' | 'UX', string> = {
-  IX: 'builtin-daymark-2x1',
-  OX: 'builtin-daymark-2x1',
-  UX: 'builtin-daymark-2x1',
-}
+// Default active layout (single global layout; IX/OX/UX is a placeable element)
+export const DEFAULT_LAYOUT_ID = 'builtin-daymark-2x1'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function getLabelSize(key: string): LabelSize {

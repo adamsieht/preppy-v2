@@ -27,11 +27,12 @@ export function loadItems(): QuickListEntry[] {
     return raw.map(item => {
       if (item['type'] === 'bundle' && Array.isArray(item['entries'])) {
         const entries = (item['entries'] as Array<Record<string, unknown>>).map(e => ({
-          hrs:  migrateHrs(e['hrs']),
-          qty:  (e['qty'] as number) ?? 1,
-          name: e['name'] as string | undefined,
+          hrs:      migrateHrs(e['hrs']),
+          qty:      (e['qty'] as number) ?? 1,
+          name:     e['name'] as string | undefined,
+          template: ((e['template'] as import('./types').LabelTemplate) ?? 'IX') as import('./types').LabelTemplate,
         }))
-        return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, template: (item['template'] as import('./types').LabelTemplate) ?? undefined, entries }
+        return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, entries }
       }
       return {
         id:       item['id'] as string,

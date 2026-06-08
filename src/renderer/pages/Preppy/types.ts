@@ -8,9 +8,10 @@ export type PrintQtyTarget =
   | { kind: 'static'; label: string; staticId: string }
 
 export interface BundleEntry {
-  hrs:   TemplateHrs
-  qty:   number
-  name?: string
+  hrs:      TemplateHrs
+  qty:      number
+  name?:    string
+  template: LabelTemplate
 }
 
 export interface QuickSingleItem {
@@ -22,11 +23,10 @@ export interface QuickSingleItem {
 }
 
 export interface QuickBundleItem {
-  id:        string
-  name:      string
-  type:      'bundle'
-  template?: LabelTemplate
-  entries:   BundleEntry[]
+  id:      string
+  name:    string
+  type:    'bundle'
+  entries: BundleEntry[]
 }
 
 export type QuickListEntry = QuickSingleItem | QuickBundleItem

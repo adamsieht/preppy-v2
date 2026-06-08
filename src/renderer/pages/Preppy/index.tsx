@@ -375,15 +375,15 @@ export default function Preppy() {
     }
   }
 
-  async function handlePrintBundle(entries: BundleEntry[], multiplier: number, bundleTemplate?: import('./types').LabelTemplate) {
-    const tpl      = bundleTemplate ?? template
+  async function handlePrintBundle(entries: BundleEntry[], multiplier: number) {
     const id       = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const totalQty = entries.reduce((sum, e) => sum + e.qty * multiplier, 0)
 
-    setToasts(prev => [...prev, { id, qty: totalQty, done: 0, state: 'printing', label: `${tpl} Bundle` }])
+    setToasts(prev => [...prev, { id, qty: totalQty, done: 0, state: 'printing', label: 'Bundle' }])
 
     let done = 0
     for (const entry of entries) {
+      const tpl = entry.template ?? 'IX'
       const qty = entry.qty * multiplier
       try {
         const result = await window.electronAPI.print({ template: tpl, durationHrs: entry.hrs[tpl], qty })

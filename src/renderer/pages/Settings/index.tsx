@@ -5,8 +5,9 @@ import PrinterTab from './tabs/PrinterTab'
 import CalibrationTab from './tabs/CalibrationTab'
 import NetworkTab from './tabs/NetworkTab'
 import DateTimeTab from './tabs/DateTimeTab'
+import LabelsTab from './tabs/LabelsTab'
 
-type TabKey = 'general' | 'printer' | 'calibration' | 'network' | 'datetime'
+type TabKey = 'general' | 'printer' | 'calibration' | 'network' | 'datetime' | 'labels'
 
 // Tab registry — add a new entry here to add a settings category. The sidebar and
 // content area are both driven off this list, so no other wiring is needed.
@@ -16,6 +17,7 @@ const TABS: { key: TabKey; title: string; icon: string; Component: React.Compone
   { key: 'calibration', title: 'Calibration', icon: '🎯', Component: CalibrationTab },
   { key: 'network',     title: 'Network',     icon: '📶', Component: NetworkTab },
   { key: 'datetime',    title: 'Date & Time', icon: '🕐', Component: DateTimeTab },
+  { key: 'labels',      title: 'Labels',      icon: '🏷', Component: LabelsTab  },
 ]
 
 // External pages reachable from the settings sidebar (kept as their own routes).

@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import type { QuickSingleItem, BundleEntry } from '../Preppy/types'
+import type { QuickSingleItem, BundleEntry, LabelTemplate } from '../Preppy/types'
 import { fmtDuration } from '../Preppy/utils'
 import { styles } from './styles'
 
 interface AddBundlePageProps {
   quickItems:      QuickSingleItem[]
   durationOptions: { label: string; hrs: number }[]
-  onAdd:   (name: string, entries: BundleEntry[]) => void
+  onAdd:   (name: string, entries: BundleEntry[], template: LabelTemplate) => void
   onClose: () => void
 }
 
 export default function AddBundlePage({ quickItems, durationOptions, onAdd, onClose }: AddBundlePageProps) {
   const [name,       setName]       = useState('')
+  const [template,   setTemplate]   = useState<LabelTemplate>('IX')
   const [entries,    setEntries]    = useState<BundleEntry[]>([])
   // qty per quick-item row (keyed by item id)
   const [itemQtys,   setItemQtys]   = useState<Record<string, number>>({})
@@ -41,7 +42,7 @@ export default function AddBundlePage({ quickItems, durationOptions, onAdd, onCl
 
   function handleSave() {
     if (!name.trim() || entries.length === 0) return
-    onAdd(name.trim(), entries)
+    onAdd(name.trim(), entries, template)
     onClose()
   }
 
@@ -73,6 +74,20 @@ export default function AddBundlePage({ quickItems, durationOptions, onAdd, onCl
             />
           </div>
 
+          {/* Template selector */}
+          <div>
+            <div className={styles.sectionLbl}>Label Template</div>
+            <div className="flex gap-2">
+              {(['IX', 'OX', 'UX'] as LabelTemplate[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setTemplate(t)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold border cursor-pointer transition-colors ${template === t ? 'bg-[#28a745] border-[#28a745] text-white' : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681] hover:text-white'}`}
+                >{t}</button>
+              ))}
+            </div>
+          </div>
+
           {/* Current entries */}
           {entries.length > 0 && (
             <div>
@@ -86,7 +101,7 @@ export default function AddBundlePage({ quickItems, durationOptions, onAdd, onCl
                       <div className="text-white text-sm font-medium truncate">{entry.name ?? 'Custom'}</div>
                       {!entry.name && (
                         <div className="text-[#6e7681] text-xs mt-[1px]">
-                          IX {fmtDuration(entry.hrs.IX)} · OX {fmtDuration(entry.hrs.OX)} · UX {fmtDuration(entry.hrs.UX)}
+                          {template}: {fmtDuration(entry.hrs[template])}
                         </div>
                       )}
                     </div>

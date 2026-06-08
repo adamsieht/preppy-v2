@@ -51,4 +51,17 @@ export const classes = {
   recentBtn:       'shrink-0 px-2 py-1 text-xs font-bold rounded border border-[#30363d] bg-[#0d1117] text-[#adbac7] cursor-pointer hover:border-[#6e7681] hover:text-white transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100',
   addForm:         'shrink-0 border-t border-[#30363d] p-3 flex flex-col gap-[6px]',
   addBtn:          'flex-1 py-2 border-0 rounded bg-[#28a745] text-white text-sm font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+  // Bundle container card
+  bundleList:      'overflow-y-auto flex-1 min-h-0 flex flex-col gap-3 p-3',
+  bundleCard:      'border border-[#30363d] rounded-xl bg-[#161b22] overflow-hidden shrink-0',
+  bundleCardHead:  'flex items-center gap-2 px-3 py-2 border-b border-[#30363d]',
+  bundleCardBody:  'flex gap-2 px-3 py-2 overflow-x-auto scrollbar-dark',
+  bundleCardFoot:  'flex items-center justify-between gap-3 px-3 py-2 border-t border-[#30363d]',
+  // Mini item card inside a bundle
+  miniCard:        'shrink-0 w-[120px] flex flex-col border border-[#30363d] rounded-lg bg-[#0d1117] overflow-hidden',
+  miniCardPreview: 'h-[70px] bg-[#090c10] p-1 shrink-0',
+  miniQtyRow:      'flex items-center justify-center gap-2 px-2 py-2 border-t border-[#30363d]',
+  miniQtyBtn:      'w-7 h-7 rounded border border-[#30363d] bg-[#161b22] text-white text-base flex items-center justify-center cursor-pointer hover:border-[#6e7681] transition-colors',
+  tplPill:         (active: boolean) => `px-2 py-0.5 rounded text-[10px] font-bold border cursor-pointer transition-colors ${active ? 'bg-[#28a745] border-[#28a745] text-white' : 'bg-transparent border-[#30363d] text-[#6e7681] hover:border-[#6e7681]'}`,
+  bundlePrintBtn:  'min-h-[36px] px-6 rounded-lg bg-[#28a745] hover:bg-[#2ea043] border-0 text-white font-bold text-sm cursor-pointer transition-colors',
 }

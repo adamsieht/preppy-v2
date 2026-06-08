@@ -31,7 +31,7 @@ export function loadItems(): QuickListEntry[] {
           qty:  (e['qty'] as number) ?? 1,
           name: e['name'] as string | undefined,
         }))
-        return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, entries }
+        return { id: item['id'] as string, name: item['name'] as string, type: 'bundle' as const, template: (item['template'] as import('./types').LabelTemplate) ?? undefined, entries }
       }
       return {
         id:       item['id'] as string,

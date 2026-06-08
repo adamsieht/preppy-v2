@@ -22,10 +22,11 @@ export interface QuickSingleItem {
 }
 
 export interface QuickBundleItem {
-  id:      string
-  name:    string
-  type:    'bundle'
-  entries: BundleEntry[]
+  id:        string
+  name:      string
+  type:      'bundle'
+  template?: LabelTemplate
+  entries:   BundleEntry[]
 }
 
 export type QuickListEntry = QuickSingleItem | QuickBundleItem

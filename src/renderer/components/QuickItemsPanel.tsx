@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import type { QuickListEntry, QuickSingleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs, ActiveLogEntry } from '../pages/Preppy/types'
+import type { QuickListEntry, QuickSingleItem, QuickBundleItem, BundleEntry, CategoryDef, PrintJob, LabelTemplate, TemplateHrs, ActiveLogEntry } from '../pages/Preppy/types'
+import type { LabelLayout } from '../pages/Preppy/labelTypes'
 import { ITEM_CATEGORIES, CATS_KEY, HIDDEN_CATS_KEY, ITEMS_KEY, ACTIVE_LOG_KEY, RECENT_CLEARED_KEY, PROMPT_HRS, PRINT_COUNTS_KEY, HOURLY_COUNTS_KEY, FAVORITES_KEY, QUICK_SORT_FIELD_KEY, QUICK_SORT_DIR_KEY, QUICK_CARD_STYLE_KEY } from '../pages/Preppy/constants'
 import type { QuickSortField, QuickCardStyle } from '../pages/Preppy/constants'
 import { loadItems, loadStored, loadUserCats, persist, fmtDuration, fmtExpiry, timeAgo, getCat } from '../pages/Preppy/utils'
@@ -42,9 +43,90 @@ function mergeEntries(entries: ActiveLogEntry[]): ActiveLogEntry[] {
   })
 }
 
+// ── BundleCard ─────────────────────────────────────────────────────────────
+interface BundleCardProps {
+  bundle:         QuickBundleItem
+  globalTemplate: LabelTemplate
+  cardStyle:      'standard' | 'label'
+  activeLayout:   LabelLayout
+  onPrint:        (entries: BundleEntry[], tpl: LabelTemplate) => void
+  onDelete:       () => void
+  isEditing:      boolean
+}
+
+function BundleCard({ bundle, globalTemplate, cardStyle, activeLayout, onPrint, onDelete, isEditing }: BundleCardProps) {
+  const [localTemplate, setLocalTemplate] = useState<LabelTemplate>(bundle.template ?? globalTemplate)
+  const [localQtys, setLocalQtys] = useState<number[]>(() => bundle.entries.map(e => e.qty))
+
+  const totalLabels = localQtys.reduce((s, q) => s + q, 0)
+
+  function adjustQty(i: number, delta: number) {
+    setLocalQtys(prev => prev.map((q, idx) => idx === i ? Math.max(1, Math.min(99, q + delta)) : q))
+  }
+
+  function handlePrint() {
+    const entries = bundle.entries.map((e, i) => ({ ...e, qty: localQtys[i] }))
+    onPrint(entries, localTemplate)
+  }
+
+  return (
+    <div className={classes.bundleCard}>
+      {/* Header */}
+      <div className={classes.bundleCardHead}>
+        <span className={classes.bundleBadge}>BUNDLE</span>
+        <span className="flex-1 text-white font-medium text-sm truncate min-w-0">{bundle.name}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          {(['IX', 'OX', 'UX'] as LabelTemplate[]).map(t => (
+            <button key={t} onClick={() => setLocalTemplate(t)} className={classes.tplPill(localTemplate === t)}>{t}</button>
+          ))}
+        </div>
+        {isEditing && (
+          <button onClick={onDelete} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149] ml-1`} title="Remove">✕</button>
+        )}
+      </div>
+
+      {/* Mini item cards */}
+      <div className={classes.bundleCardBody}>
+        {bundle.entries.map((entry, i) => (
+          <div key={i} className={classes.miniCard}>
+            {cardStyle === 'label' && (
+              <div className={classes.miniCardPreview}>
+                <ScaledLabelPreview
+                  layout={activeLayout}
+                  values={{ template: localTemplate, durationHrs: entry.hrs[localTemplate] }}
+                />
+              </div>
+            )}
+            <div className="px-2 pt-1">
+              <div className="text-[11px] text-white font-medium truncate leading-snug">
+                {entry.name ?? fmtDuration(entry.hrs[localTemplate])}
+              </div>
+              {entry.name && (
+                <div className="text-[10px] text-[#6e7681]">{fmtDuration(entry.hrs[localTemplate])}</div>
+              )}
+            </div>
+            <div className={classes.miniQtyRow}>
+              <button onClick={() => adjustQty(i, -1)} className={classes.miniQtyBtn}>−</button>
+              <span className="text-white text-sm font-mono w-6 text-center tabular-nums">{localQtys[i]}</span>
+              <button onClick={() => adjustQty(i, +1)} className={classes.miniQtyBtn}>+</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div className={classes.bundleCardFoot}>
+        <span className="text-[#6e7681] text-xs">{totalLabels} label{totalLabels !== 1 ? 's' : ''}</span>
+        <button onClick={handlePrint} className={classes.bundlePrintBtn}>Print</button>
+      </div>
+    </div>
+  )
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 interface PanelProps {
   onPrint:          (hrs: number, qty: number) => void
-  onPrintBundle:    (entries: BundleEntry[], multiplier: number) => void
+  onPrintBundle:    (entries: BundleEntry[], multiplier: number, bundleTemplate?: LabelTemplate) => void
   onCustomPrint:    (templateHrs: TemplateHrs, label: string) => void
   template:         LabelTemplate
   durationOptions:  { label: string; hrs: number }[]
@@ -193,9 +275,9 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     setEditingItem(null)
   }
 
-  function addBundle(bundleName: string, entries: BundleEntry[]) {
+  function addBundle(bundleName: string, entries: BundleEntry[], tpl: LabelTemplate) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const next: QuickListEntry[] = [...items, { id, name: bundleName, type: 'bundle', entries }]
+    const next: QuickListEntry[] = [...items, { id, name: bundleName, type: 'bundle', template: tpl, entries }]
     setItems(next)
     persist(ITEMS_KEY, next)
   }
@@ -511,55 +593,22 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                 </div>
               </div>
             ) : (
-              <div className="relative flex-1 min-h-0 flex flex-col">
-                {isWide ? (
-                  /* ── Grid mode ── */
-                  <div className={classes.panelGrid(isEditing ?? false)}>
-                    {bundleItems.map(item => {
-                      if (item.type !== 'bundle') return null
-                      const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                      const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
-                      return (
-                        <div key={item.id} className={classes.gridCard}>
-                          <div className={classes.gridCardHead}>
-                            <span className={classes.bundleBadge}>BUNDLE</span>
-                            <span className="flex-1 text-white text-sm font-medium truncate min-w-0">{item.name}</span>
-                            {isEditing && <button onClick={() => removeItem(item.id)} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>}
-                          </div>
-                          <div className={classes.gridCardMeta}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
-                          <div className={classes.gridCardBtns}>
-                            <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.gridCardBtn(true)}>Print</button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  /* ── List mode ── */
-                  <div className={classes.panelList}>
-                    {bundleItems.map(item => {
-                      if (item.type !== 'bundle') return null
-                      const total   = item.entries.reduce((s, e) => s + e.qty, 0)
-                      const summary = item.entries.map(e => e.name ?? fmtDuration(e.hrs[template])).join(' + ')
-                      return (
-                        <div key={item.id} className={classes.itemRow}>
-                          <div className={classes.itemInfo}>
-                            <div className="flex items-center">
-                              <span className={classes.bundleBadge}>BUNDLE</span>
-                              <span className={`${classes.itemName} flex-1`}>{item.name}</span>
-                            </div>
-                            <div className={classes.itemDur}>{total} label{total !== 1 ? 's' : ''} · {summary}</div>
-                          </div>
-                          <button onClick={() => onPrintBundle(item.entries, 1)} className={classes.itemBtn(true)}>Print</button>
-                          {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                <div className="absolute bottom-2 right-2 text-[#6e7681] text-[10px] font-semibold pointer-events-none select-none bg-[#0d1117]/80 px-1.5 py-0.5 rounded">
-                  {bundleItems.length} bundle{bundleItems.length !== 1 ? 's' : ''}
-                </div>
+              <div className={classes.bundleList}>
+                {bundleItems.map(item => {
+                  if (item.type !== 'bundle') return null
+                  return (
+                    <BundleCard
+                      key={item.id}
+                      bundle={item}
+                      globalTemplate={template}
+                      cardStyle={cardStyle}
+                      activeLayout={activeLayout}
+                      onPrint={(entries, tpl) => onPrintBundle(entries, 1, tpl)}
+                      onDelete={() => removeItem(item.id)}
+                      isEditing={isEditing ?? false}
+                    />
+                  )
+                })}
               </div>
             )}
 

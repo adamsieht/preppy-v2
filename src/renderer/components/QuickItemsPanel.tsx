@@ -168,7 +168,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     if (!el) return
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
-        setIsWide(entry.contentRect.width > window.innerWidth / 2)
+        setIsWide(entry.contentRect.width > window.innerWidth / 3)
       }
     })
     ro.observe(el)

@@ -192,12 +192,12 @@ export default function Preppy() {
   }
   function onDividerPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!divDragRef.current) return
-    const newW = Math.max(440, Math.min(divDragRef.current.startW + e.clientX - divDragRef.current.startX, window.innerWidth - 320))
+    const newW = Math.max(440, Math.min(divDragRef.current.startW + e.clientX - divDragRef.current.startX, window.innerWidth * 0.67))
     setLeftWidth(newW)
   }
   function onDividerPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     if (!divDragRef.current) return
-    const newW = Math.max(440, Math.min(divDragRef.current.startW + e.clientX - divDragRef.current.startX, window.innerWidth - 320))
+    const newW = Math.max(440, Math.min(divDragRef.current.startW + e.clientX - divDragRef.current.startX, window.innerWidth * 0.67))
     persist(WIDTH_KEY, newW)
     divDragRef.current = null
   }

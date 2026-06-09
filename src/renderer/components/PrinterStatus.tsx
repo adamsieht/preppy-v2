@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 type Status = 'loading' | 'unconfigured' | 'ok' | 'error'
 
@@ -59,6 +60,7 @@ function PrinterIcon({ status }: { status: Status }) {
 
 export default function PrinterStatus() {
   const [status, setStatus] = useState<Status>('loading')
+  const navigate = useNavigate()
 
   async function check() {
     try {
@@ -78,10 +80,18 @@ export default function PrinterStatus() {
     return () => clearInterval(iv)
   }, [])
 
+  const clickable = status === 'unconfigured' || status === 'error'
+
   return (
     <div
       title={LABELS[status]}
-      style={{ display: 'inline-flex', alignItems: 'center', cursor: 'default', padding: '0 2px' }}
+      onClick={clickable ? () => navigate('/settings?tab=printer') : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        cursor: clickable ? 'pointer' : 'default',
+        padding: '0 2px',
+      }}
     >
       <PrinterIcon status={status} />
     </div>

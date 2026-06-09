@@ -635,12 +635,14 @@ export default function Preppy() {
 
           {/* ── Drag divider + Quick Items panel ── */}
           {!panelCollapsed && (
-            <div
-              className={classes.divider}
-              onPointerDown={onDividerPointerDown}
-              onPointerMove={onDividerPointerMove}
-              onPointerUp={onDividerPointerUp}
-            >
+            <div className={classes.divider}>
+              {/* Invisible wider touch target — extends hit area without layout change */}
+              <div
+                className="absolute inset-y-0 -left-3 -right-3 touch-none cursor-col-resize"
+                onPointerDown={onDividerPointerDown}
+                onPointerMove={onDividerPointerMove}
+                onPointerUp={onDividerPointerUp}
+              />
               <div className={classes.dividerBar} />
             </div>
           )}

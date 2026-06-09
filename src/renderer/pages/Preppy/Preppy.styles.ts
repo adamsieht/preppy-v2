@@ -25,6 +25,6 @@ export const classes = {
   btnRow:           'flex gap-2',
   btn5:             'flex-1 min-h-[36px] border border-[#30363d] rounded-lg bg-[#161b22] text-white text-sm font-bold disabled:opacity-60',
   btnX:             'flex-1 min-h-[36px] border border-[#28a745] rounded-lg bg-[#28a745] text-white text-sm font-bold disabled:opacity-60',
-  divider:          'hidden xl:flex w-[8px] shrink-0 cursor-col-resize touch-none items-center justify-center hover:bg-[#28a745]/10 select-none transition-colors',
+  divider:          'hidden xl:flex relative overflow-visible w-[8px] shrink-0 cursor-col-resize touch-none items-center justify-center hover:bg-[#28a745]/10 select-none transition-colors',
   dividerBar:       'w-[2px] h-12 rounded-full bg-[#30363d]',
 }

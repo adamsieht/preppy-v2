@@ -50,10 +50,12 @@ interface BundleCardProps {
   activeLayout: LabelLayout
   onPrint:      (entries: BundleEntry[]) => void
   onDelete:     () => void
+  onMoveUp?:    () => void
+  onMoveDown?:  () => void
   isEditing:    boolean
 }
 
-function BundleCard({ bundle, cardStyle, activeLayout, onPrint, onDelete, isEditing }: BundleCardProps) {
+function BundleCard({ bundle, cardStyle, activeLayout, onPrint, onDelete, onMoveUp, onMoveDown, isEditing }: BundleCardProps) {
   const [localQtys, setLocalQtys] = useState<number[]>(() => bundle.entries.map(e => e.qty))
 
   const totalLabels = localQtys.reduce((s, q) => s + q, 0)
@@ -68,11 +70,15 @@ function BundleCard({ bundle, cardStyle, activeLayout, onPrint, onDelete, isEdit
 
   return (
     <div className={classes.bundleCard}>
-      {/* Header — slim: just name + optional delete */}
-      <div className="flex items-center gap-2 px-3 py-[6px] border-b border-[#30363d]">
+      {/* Header — slim: name + reorder arrows + delete (edit mode) */}
+      <div className="flex items-center gap-1 px-3 py-[6px] border-b border-[#30363d]">
         <span className="flex-1 text-white font-semibold text-sm truncate min-w-0">{bundle.name}</span>
         {isEditing && (
-          <button onClick={onDelete} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>
+          <>
+            <button onClick={onMoveUp} disabled={!onMoveUp} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-white disabled:opacity-30 disabled:cursor-default text-base`} title="Move up">↑</button>
+            <button onClick={onMoveDown} disabled={!onMoveDown} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-white disabled:opacity-30 disabled:cursor-default text-base`} title="Move down">↓</button>
+            <button onClick={onDelete} className={`${classes.gridCardIconBtn} text-[#6e7681] hover:text-[#f85149]`} title="Remove">✕</button>
+          </>
         )}
       </div>
 
@@ -269,6 +275,27 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
     setEditingItem(null)
   }
 
+  function moveBundle(id: string, dir: -1 | 1) {
+    const bundleIdxInAll = items.findIndex(i => i.id === id)
+    if (bundleIdxInAll === -1) return
+    // Find the adjacent bundle in the same direction within the full items array
+    let swapIdx = -1
+    if (dir === -1) {
+      for (let i = bundleIdxInAll - 1; i >= 0; i--) {
+        if (items[i].type === 'bundle') { swapIdx = i; break }
+      }
+    } else {
+      for (let i = bundleIdxInAll + 1; i < items.length; i++) {
+        if (items[i].type === 'bundle') { swapIdx = i; break }
+      }
+    }
+    if (swapIdx === -1) return
+    const next = [...items]
+    ;[next[bundleIdxInAll], next[swapIdx]] = [next[swapIdx], next[bundleIdxInAll]]
+    setItems(next)
+    persist(ITEMS_KEY, next)
+  }
+
   function addBundle(bundleName: string, entries: BundleEntry[]) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const next: QuickListEntry[] = [...items, { id, name: bundleName, type: 'bundle', entries }]
@@ -362,7 +389,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
         onClick={onToggleCollapse}
         title="Expand Quick Items"
       >
-        <span className="text-[#6e7681] text-[18px] leading-none select-none">›</span>
+        <span className="text-[#6e7681] text-[18px] leading-none select-none">‹</span>
       </div>
     )
   }
@@ -379,7 +406,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
             onClick={onToggleCollapse}
             title="Collapse panel"
             className="w-9 shrink-0 flex items-center justify-center text-[#6e7681] hover:text-white hover:bg-[#21262d] cursor-pointer bg-transparent border-0 border-b-2 border-transparent transition-colors text-[16px] leading-none"
-          >‹</button>
+          >›</button>
         </div>
 
         {/* ── Items tab ── */}
@@ -588,7 +615,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
               </div>
             ) : (
               <div className={classes.bundleList}>
-                {bundleItems.map(item => {
+                {bundleItems.map((item, bundleIdx) => {
                   if (item.type !== 'bundle') return null
                   return (
                     <BundleCard
@@ -598,6 +625,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                       activeLayout={activeLayout}
                       onPrint={(entries) => onPrintBundle(entries, 1)}
                       onDelete={() => removeItem(item.id)}
+                      onMoveUp={bundleIdx > 0 ? () => moveBundle(item.id, -1) : undefined}
+                      onMoveDown={bundleIdx < bundleItems.length - 1 ? () => moveBundle(item.id, 1) : undefined}
                       isEditing={isEditing ?? false}
                     />
                   )

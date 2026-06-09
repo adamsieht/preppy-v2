@@ -434,12 +434,14 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
               </div>
               {/* Favorites filter + remove-category — fixed to right (sort moved to Settings → General) */}
               <div className="shrink-0 flex items-center gap-1">
-                <button
-                  onClick={removeSelectedCategory}
-                  disabled={!filterCat || filterCat === 'item'}
-                  title={filterCat && filterCat !== 'item' ? 'Remove selected category (items become "Item")' : 'Select a category to remove'}
-                  className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-[#30363d] bg-transparent text-[#6e7681] hover:text-[#f85149] hover:border-[#f85149] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#6e7681] disabled:hover:border-[#30363d]"
-                ><TrashIcon /></button>
+                {isEditing && (
+                  <button
+                    onClick={removeSelectedCategory}
+                    disabled={!filterCat || filterCat === 'item'}
+                    title={filterCat && filterCat !== 'item' ? 'Remove selected category (items become "Item")' : 'Select a category to remove'}
+                    className="w-7 h-7 shrink-0 flex items-center justify-center rounded border border-[#30363d] bg-transparent text-[#6e7681] hover:text-[#f85149] hover:border-[#f85149] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-[#6e7681] disabled:hover:border-[#30363d]"
+                  ><TrashIcon /></button>
+                )}
                 <button
                   onClick={() => setShowFavoritesOnly(prev => !prev)}
                   title={showFavoritesOnly ? 'Showing favorites — click to show all' : 'Filter to favorites'}

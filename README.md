@@ -1,20 +1,33 @@
-# preppy-v2
+# Preppy v2
 
-A touch-first food service kiosk application built on Electron + React. Designed to run on Windows tablets, Raspberry Pi, or any embedded Linux device with a 7–10" touchscreen. Manages label printing, temperature monitoring, prep lists, and WiFi configuration — all from a clean, tap-friendly interface optimized for kitchen use.
+A touch-first food service kiosk application built on Electron + React. Designed to run on Windows tablets, Raspberry Pi, or any embedded Linux device with a 7–10" touchscreen. Prints food prep and expiry labels to Zebra thermal printers, manages quick-access item lists, and keeps itself up to date — all from a clean, tap-friendly interface built for kitchen use.
 
 ---
 
 ## Features
 
-| Page | Description |
-|---|---|
-| **Print Labels** | Select a ZPL template (IX/OX/UX) and a time preset (4 HR → 30 DAY). Live label preview updates as you choose. Prints to a Zebra-compatible thermal printer or writes `.zpl` files in simulate mode. |
-| **Print Custom** | Enter an exact duration via numpad and print any quantity. |
-| **Temperatures** | Real-time dashboard of all connected BLE/file-based temperature sensors. Color-coded danger/warning/normal zones. Tap any sensor for a 100-point history chart. |
-| **Prep List (Tally)** | Shift-timed prep checklist. Tap items to add to cart, adjust quantities, and print a prep sheet. |
-| **WiFi** | Scan for nearby networks, tap to select, enter password via on-screen keyboard. Writes directly to `wpa_supplicant.conf`. |
-| **Reports** | Multi-tab analytics dashboard: summary stats, print analytics (by template/preset/hour), temperature stats (min/max/avg per sensor, out-of-range events), raw print history, temperature charts, and system logs. |
-| **Debug** | System info, hardware path checks, database row counts, config viewer, Redux state inspector, raw ZPL sender. |
+### Print Labels
+Select a ZPL label template and a time preset — 4 HR through 30 DAY. A live preview renders immediately. Tap print, choose a quantity, and it goes straight to the printer. Presets are fully customizable: add, remove, and drag to reorder. Templates ship as IX (Internal Use), OX (Opened/Expiry), and UX (Use First).
+
+### Custom Labels
+Enter any hour duration manually via a large numpad, pick a quantity and template, and print. Useful for edge cases or items that don't fit a standard preset.
+
+### Quick Items
+A panel of pre-configured items, each with its own duration and template. Tap an item to print it immediately, or bundle multiple items into a single print run. Items are grouped into categories and support per-template hour overrides.
+
+### Label Date Calculation
+Configurable expiry logic to match how your kitchen counts shelf life. Day-first counting mode subtracts 24 h so a "2 day" label prints for tomorrow rather than the day after. Includes a cutoff time (default 11 PM) after which labels revert to standard calculation, minute rounding for same-day labels (5 / 10 / 15 / 30 min), and an option to automatically substitute the static EOD label when a same-day expiry would cross midnight.
+
+### Settings
+Unified settings hub with tabs for:
+- **Printer** — device selection, test print, simulate mode
+- **Labels** — categories, custom presets, date calculation behavior
+- **Network** — WiFi scanning and credential management
+- **Date & Time** — NTP sync and manual time set
+- **Updates** — check for, download, and install app updates
+
+### In-App Updates
+Check for new releases from GitHub, download in the background with a live progress bar, and install on next quit. The app swaps itself out automatically — no reinstall or USB drive needed. Update source is configurable for private repositories.
 
 ---
 
@@ -27,8 +40,7 @@ A touch-first food service kiosk application built on Electron + React. Designed
 | Bundler | Vite 5 + `vite-plugin-electron` |
 | State | Redux Toolkit |
 | Database | `better-sqlite3` (WAL mode, single-file SQLite) |
-| Charts | Chart.js 4 + react-chartjs-2 |
-| Logging | `electron-log` with daily rotation |
+| Date logic | Day.js |
 | Testing | Vitest 2 + Testing Library |
 
 ---
@@ -38,22 +50,25 @@ A touch-first food service kiosk application built on Electron + React. Designed
 ```
 src/
 ├── main/                        # Electron main process (Node.js)
-│   ├── index.ts                 # App bootstrap, GPU flags, IPC registration
+│   ├── index.ts                 # App bootstrap, kiosk flag, IPC registration
 │   ├── logger.ts                # electron-log wrapper
 │   ├── ipc/
 │   │   ├── channels.ts          # All IPC channel name constants
-│   │   └── handlers/            # One handler file per domain
+│   │   └── handlers/            # One file per domain
 │   │       ├── db.handler.ts
 │   │       ├── debug.handler.ts
 │   │       ├── printer.handler.ts
+│   │       ├── printer-setup.handler.ts
 │   │       ├── sensor.handler.ts
+│   │       ├── system.handler.ts
+│   │       ├── updater.handler.ts
 │   │       └── wifi.handler.ts
-│   └── services/                # Pure business logic — no IPC or Electron UI here
+│   └── services/
 │       ├── config.service.ts    # Loads config.json, exposes resourcePath()
 │       ├── db.service.ts        # SQLite schema + all CRUD functions
-│       ├── mock-sensor.service.ts # Simulated sensor for dev/no-hardware
-│       ├── printer.service.ts   # ZPL template fill, print, simulate
+│       ├── printer.service.ts   # ZPL template fill, print, simulate mode
 │       ├── sensor.service.ts    # Polls /templogs, falls back to mock
+│       ├── updater.service.ts   # GitHub Releases check, download, apply
 │       └── wifi.service.ts      # nmcli scan, wpa_supplicant write
 │
 ├── preload/
@@ -61,60 +76,57 @@ src/
 │
 └── renderer/                    # React app (no Node/Electron access)
     ├── App.tsx                  # Router
-    ├── components/              # Shared components
-    │   ├── AutoDismissAlert.tsx # Success auto-dismiss, errors require tap
-    │   ├── Clock.tsx            # Live date/time bar
-    │   ├── DebugButton.tsx      # Fixed debug entry point
-    │   ├── LabelPreview.tsx     # Client-side live label mock (no IPC)
-    │   ├── PageLayout.tsx       # Full-height shell with header + sticky footer
-    │   └── PrintPreview.tsx     # Full ZPL viewer + substitution table
-    ├── hooks/
-    │   ├── useErrorMsg.ts       # Verbose vs. friendly error messages
-    │   └── useIpc.ts
-    ├── pages/                   # One directory per route
-    │   ├── Home/
-    │   ├── Preppy/              # Print Labels
-    │   ├── PrintX/              # Custom duration
-    │   ├── Reports/
-    │   ├── Tally/
-    │   ├── Tempy/               # Temperature monitor
-    │   ├── WiFi/
-    │   └── Debug/
+    ├── components/              # Shared components (Clock, LabelPreview, etc.)
+    ├── pages/
+    │   ├── Preppy/              # Main label printing page
+    │   │   ├── labelDateCalc.ts # Expiry calculation logic + settings
+    │   │   ├── labelZpl.ts      # ZPL generation + preview helpers
+    │   │   └── staticPresets.ts # Built-in and user-defined time presets
+    │   ├── PrintX/              # Custom duration printing
+    │   ├── Settings/
+    │   │   └── tabs/            # GeneralTab, PrinterTab, LabelsTab, NetworkTab,
+    │   │                        # DateTimeTab, UpdatesTab
+    │   ├── Reports/             # Print history and analytics
+    │   └── Debug/               # System info, DB stats, raw ZPL sender
     └── store/                   # Redux slices
-        └── slices/
-            ├── alerts.slice.ts
-            ├── devSettings.slice.ts  # verboseErrors toggle
-            └── sensors.slice.ts
 ```
 
 ---
 
 ## IPC Channels
 
-All renderer↔main communication goes through the typed bridge in `src/preload/index.ts`. The full channel list is in `src/main/ipc/channels.ts`:
+All renderer↔main communication goes through the typed bridge in `src/preload/index.ts`. Channel constants are in `src/main/ipc/channels.ts`.
 
-| Channel | Direction | Description |
-|---|---|---|
-| `printer:print` | invoke | Print N labels from a template + duration |
-| `printer:preview` | invoke | Return filled ZPL + field values without printing |
-| `printer:history` | invoke | Return last N print jobs |
-| `sensor:list` | invoke | Return current sensor state for all sensors |
-| `sensor:update` | push | Real-time sensor reading broadcast |
-| `wifi:save` | invoke | Validate, write supplicant.conf, reconfigure |
-| `wifi:get` | invoke | Return last saved SSID (no password) |
-| `wifi:scan` | invoke | Run `nmcli` scan, return sorted network list |
-| `config:get` | invoke | Return full merged config |
-| `logs:tail` | push | Stream log lines to renderer |
-| `report:prints` | invoke | Return print job history |
-| `report:temps` | invoke | Return temperature log (optionally filtered by MAC) |
-| `debug:info` | invoke | Return system info, hardware checks, DB stats |
-| `debug:send-zpl` | invoke | Send raw ZPL string directly to printer |
+| Channel | Description |
+|---|---|
+| `printer:print` | Print N labels from a template + resolved expiry |
+| `printer:preview` | Return filled ZPL without printing |
+| `printer:scan` | Discover connected USB printers |
+| `printer:set-device` | Set the active printer device path |
+| `printer:test` | Send a test print |
+| `printer:history` | Return last N print jobs |
+| `sensor:list` | Return current readings for all sensors |
+| `sensor:update` | Push — real-time sensor reading broadcast |
+| `wifi:scan` | Run `nmcli` scan, return sorted network list |
+| `wifi:save` | Write credentials to `wpa_supplicant.conf` |
+| `wifi:get` | Return last saved SSID |
+| `system:set-time` | Set system clock |
+| `system:enable-ntp` | Enable/disable NTP sync |
+| `update:check` | Query GitHub Releases for a newer version |
+| `update:download` | Stream download of the update file |
+| `update:progress` | Push — download progress events |
+| `update:apply` | Write swap script and quit to apply update |
+| `update:get-settings` | Return saved update source settings |
+| `update:save-settings` | Persist update source settings |
+| `app:version` | Return the running app version |
+| `debug:info` | Return system info, hardware checks, DB stats |
+| `debug:send-zpl` | Send raw ZPL string directly to printer |
 
 ---
 
 ## Configuration
 
-The app reads `resources/config.json` at startup and deep-merges it with `{userData}/config.local.json` if present. Override any key in `config.local.json` without editing the shipped defaults.
+The app reads `resources/config.json` at startup and deep-merges it with `{userData}/config.local.json` if present. Override any key in `config.local.json` without touching the shipped defaults.
 
 ```json
 {
@@ -123,12 +135,6 @@ The app reads `resources/config.json` at startup and deep-merges it with `{userD
     "zplTemplateDir": "resources/zpl",
     "simulate": false
   },
-  "temperature": {
-    "dangerLow": 31,
-    "dangerHigh": 41,
-    "warningLow": 37,
-    "units": "F"
-  },
   "sensor": {
     "pollIntervalMs": 10000,
     "logDir": "/templogs"
@@ -136,23 +142,17 @@ The app reads `resources/config.json` at startup and deep-merges it with `{userD
   "wifi": {
     "interface": "wlan0",
     "supplicantPath": "/etc/wpa_supplicant/wpa_supplicant.conf"
-  },
-  "logging": {
-    "retentionDays": 30,
-    "maxFileSizeMb": 10
   }
 }
 ```
 
-**Simulate mode** activates automatically when `printer.device` doesn't exist (e.g. in development). Labels are written as `.zpl` files to `simulated-labels/` in the project root.
-
-**Mock sensor** activates automatically when `sensor.logDir` doesn't exist. Two virtual sensors with realistic fridge-range temperatures (33–41°F) emit live updates via IPC.
+**Simulate mode** activates automatically when `printer.device` doesn't exist (e.g. in development). Labels are written as `.zpl` files to `simulated-labels/` in the project root instead of sent to the printer.
 
 ---
 
 ## ZPL Templates
 
-Templates live in `resources/zpl/` with `{{PLACEHOLDER}}` substitution:
+Templates live in `resources/zpl/` and use `{{PLACEHOLDER}}` substitution:
 
 | Placeholder | Value |
 |---|---|
@@ -160,12 +160,9 @@ Templates live in `resources/zpl/` with `{{PLACEHOLDER}}` substitution:
 | `{{TIME}}` | Print time (`hh:mm A`) |
 | `{{EXPIRY_DATE}}` | Expiry date (`MM/DD/YY`) |
 | `{{EXPIRY_TIME}}` | Expiry time (`hh:mm A`) |
-| `{{DURATION}}` | Duration in hours |
+| `{{DURATION}}` | Duration label text |
 
-Three templates ship by default:
-- **IX** — Internal Use
-- **OX** — Opened/Expiry
-- **UX** — Use First
+Three templates ship by default: **IX** (Internal Use), **OX** (Opened/Expiry), **UX** (Use First).
 
 ---
 
@@ -269,7 +266,7 @@ npm run dev          # starts Electron with hot reload
 
 **Linux / Raspberry Pi only:**
 - WiFi scanning requires `nmcli` (`network-manager` package)
-- Printer writes to `/dev/usb/lp0` — requires user in `lp` group
+- Printer writes to `/dev/usb/lp0` — requires user in the `lp` group
 - Sensor logs expected at `/templogs/*.log` (tab-delimited: `mac\ttime\ttemp\thumidity\tbattery`)
 
 ---
@@ -281,19 +278,6 @@ npm test              # run all tests once
 npm run test:watch    # watch mode
 npm run test:coverage # with coverage report
 ```
-
-**61 tests** across 8 test files:
-
-| Suite | Coverage |
-|---|---|
-| `config.service` | `deepMerge` — scalar, nested, mutation safety |
-| `wifi.service` | SSID/password regex validation |
-| `printer.service` | Template fill, expiry math, simulate mode, file errors |
-| `db.service` | WAL init, all CRUD functions |
-| `mock-sensor.service` | Tick behavior, range clamping, IPC emission, timer cleanup |
-| `LabelPreview` | All 3 templates, date math, duration text |
-| `AutoDismissAlert` | Auto-dismiss timing, manual close, custom delay |
-| `useErrorMsg` | Verbose vs. friendly mode, fallback, non-Error types |
 
 ---
 

@@ -22,6 +22,13 @@ export const IPC = {
   SYSTEM_SET_TIME:          'system:set-time',
   SYSTEM_OPEN_TIME_SETTINGS:'system:open-time-settings',
   SYSTEM_ENABLE_NTP:        'system:enable-ntp',
+  UPDATE_CHECK:         'update:check',
+  UPDATE_DOWNLOAD:      'update:download',
+  UPDATE_PROGRESS:      'update:progress',
+  UPDATE_APPLY:         'update:apply',
+  UPDATE_GET_SETTINGS:  'update:get-settings',
+  UPDATE_SAVE_SETTINGS: 'update:save-settings',
+  APP_VERSION:          'app:version',
 } as const
 
 export type IpcChannel = typeof IPC[keyof typeof IPC]

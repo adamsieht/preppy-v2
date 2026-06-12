@@ -187,6 +187,9 @@ Write-Host "=== Kiosk configuration complete ===" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "A restart is recommended for all settings to take effect."
 Write-Host ""
+Write-Host "Printer setup (run after restart, with Zebra connected via USB):" -ForegroundColor DarkYellow
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\setup-printer-windows.ps1" -ForegroundColor DarkYellow
+Write-Host ""
 $restart = Read-Host "Restart now? [y/N]"
 if ($restart -match '^[Yy]') {
     Restart-Computer -Force

@@ -169,7 +169,7 @@ function scanWindows(currentDevice: string): UsbPrinterDevice[] {
 
       const isZebra = name.toLowerCase().includes('zebra')
       devices.push({
-        path:        portName,
+        path:        name,      // printer queue name — used by Win32 WritePrinter API
         displayName: name,
         manufacturer: isZebra ? 'Zebra Technologies' : '',
         model:        name,
@@ -177,8 +177,8 @@ function scanWindows(currentDevice: string): UsbPrinterDevice[] {
         productId:   '',
         connection:  isUsb ? 'usb' : 'usb',   // COM-over-USB is still USB
         isZebra,
-        writable:    true,  // Windows doesn't easily expose write permission pre-connect
-        isCurrent:   portName === currentDevice,
+        writable:    true,
+        isCurrent:   name === currentDevice,
       })
     }
     return devices
@@ -195,7 +195,7 @@ function scanWindows(currentDevice: string): UsbPrinterDevice[] {
       if (!name || !portName) continue
       const isZebra = name.toLowerCase().includes('zebra')
       devices.push({
-        path:        portName,
+        path:        name,      // printer queue name — used by Win32 WritePrinter API
         displayName: name,
         manufacturer: isZebra ? 'Zebra Technologies' : '',
         model:        name,
@@ -204,7 +204,7 @@ function scanWindows(currentDevice: string): UsbPrinterDevice[] {
         connection:  'usb',
         isZebra,
         writable:    true,
-        isCurrent:   portName === currentDevice,
+        isCurrent:   name === currentDevice,
       })
     }
   } catch { /* PowerShell also failed — return empty */ }
@@ -221,8 +221,26 @@ export function scanPrinters(): UsbPrinterDevice[] {
   return []
 }
 
-/** Write-access check only — no paper used. */
+/** Verify the device/printer is accessible — no paper used. */
 export function testPrinterDevice(devicePath: string): { success: boolean; error?: string } {
+  // Windows printer queue name: check via PowerShell rather than fs.accessSync
+  const isWinPrinterName = process.platform === 'win32'
+    && !devicePath.includes('\\') && !devicePath.includes('/')
+    && !/^[A-Za-z]:/.test(devicePath)
+
+  if (isWinPrinterName) {
+    try {
+      const escaped = devicePath.replace(/'/g, "''")
+      execSync(
+        `powershell -NoProfile -NonInteractive -Command "if (-not (Get-Printer -Name '${escaped}' -ErrorAction SilentlyContinue)) { exit 1 }"`,
+        { timeout: 5000 },
+      )
+      return { success: true }
+    } catch {
+      return { success: false, error: `Printer "${devicePath}" not found. Run scripts/setup-printer-windows.ps1 first.` }
+    }
+  }
+
   try {
     fs.accessSync(devicePath, fs.constants.W_OK)
     return { success: true }

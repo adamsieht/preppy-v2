@@ -207,6 +207,14 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -GitHubToke
 
 After the next login, Preppy starts automatically in fullscreen kiosk mode.
 
+**Step 3 — Set up the Zebra printer** (run once with the printer connected via USB, after the restart from Step 1). Creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver so Preppy can send raw ZPL bytes without a Zebra driver:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-printer-windows.ps1
+```
+
+Then open Preppy → Settings → Printer and select **Zebra ZPL** from the device list.
+
 **To uninstall:**
 
 ```powershell

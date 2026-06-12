@@ -17,6 +17,9 @@ interface UsbPrinterDevice {
 
 interface FeedbackState { path: string; ok: boolean; msg: string }
 
+const TEST_PRINT_KEY    = 'preppy_test_printed'
+const CHECKLIST_DISMISS = 'preppy_setup_dismissed'
+
 const c = {
   pill: (ok: boolean) =>
     `inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-xs font-semibold ${ok ? 'bg-[#1a4731] text-[#3fb950]' : 'bg-[#3d1a1a] text-[#f85149]'}`,
@@ -29,6 +32,7 @@ const c = {
   emptyTitle: 'text-[#adbac7] font-semibold text-sm',
   emptyBody:  'text-[#6e7681] text-xs max-w-[280px] leading-relaxed',
   feedbackRow: (ok: boolean) => `flex items-center gap-2 text-xs ${ok ? 'text-[#3fb950]' : 'text-[#f85149]'}`,
+  checkRow: (done: boolean) => `flex items-center gap-2 text-sm ${done ? 'text-[#3fb950]' : 'text-[#adbac7]'}`,
 }
 
 function ConnectionBadge({ type }: { type: 'usb' | 'bluetooth' | 'network' }) {
@@ -41,6 +45,20 @@ function ConnectionBadge({ type }: { type: 'usb' | 'bluetooth' | 'network' }) {
   return <span className={c.metaChip(bg)}>{label}</span>
 }
 
+function generateTestZpl(): string {
+  const now  = new Date()
+  const date = now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })
+  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return [
+    '^XA',
+    '^CI28',
+    '^FO30,20^A0N,36,26^FDPreppy Test Print^FS',
+    `^FO30,68^A0N,22,16^FD${date}  ${time}^FS`,
+    '^FO30,100^A0N,18,14^FDPrinter setup OK^FS',
+    '^XZ',
+  ].join('\n')
+}
+
 export default function PrinterTab() {
   const [currentDevice, setCurrentDevice]     = useState<string>('')
   const [currentWritable, setCurrentWritable] = useState<boolean | null>(null)
@@ -50,6 +68,8 @@ export default function PrinterTab() {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null)
   const [manualPath, setManualPath] = useState('')
   const [working, setWorking]   = useState<string | null>(null)
+  const [testPrintSent, setTestPrintSent] = useState(() => localStorage.getItem(TEST_PRINT_KEY) === '1')
+  const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem(CHECKLIST_DISMISS) === '1')
 
   useEffect(() => {
     window.electronAPI.getConfig().then((cfg: unknown) => {
@@ -57,7 +77,7 @@ export default function PrinterTab() {
       setCurrentDevice(dev)
       setManualPath(dev)
     }).catch(() => {})
-    // Auto-scan on first open so detected printers show immediately
+    // Auto-scan on first open
     handleScan()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,6 +93,11 @@ export default function PrinterTab() {
       const found = await window.electronAPI.scanPrinters()
       setDevices(found)
       setScanned(true)
+      // Auto-select: if no device is currently active and a printer was found, pick the best one
+      if (!found.some(d => d.isCurrent) && found.length > 0) {
+        const best = found.find(d => d.isZebra) ?? found[0]
+        await handleUse(best.path, found)
+      }
     } catch (err) {
       setFeedback({ path: '', ok: false, msg: `Scan failed: ${err instanceof Error ? err.message : String(err)}` })
     } finally {
@@ -80,14 +105,14 @@ export default function PrinterTab() {
     }
   }
 
-  async function handleUse(devPath: string) {
+  async function handleUse(devPath: string, currentDevices?: UsbPrinterDevice[]) {
     setWorking(devPath)
     setFeedback(null)
     try {
       const result = await window.electronAPI.setPrinterDevice(devPath)
       if (result.success) {
         setCurrentDevice(devPath)
-        setDevices(prev => prev.map(d => ({ ...d, isCurrent: d.path === devPath })))
+        setDevices(prev => (currentDevices ?? prev).map(d => ({ ...d, isCurrent: d.path === devPath })))
         setFeedback({ path: devPath, ok: true, msg: 'Device saved as active printer.' })
       } else {
         setFeedback({ path: devPath, ok: false, msg: result.error ?? 'Failed to save device.' })
@@ -107,10 +132,29 @@ export default function PrinterTab() {
       setFeedback({
         path: devPath,
         ok: result.success,
-        msg: result.success ? 'Device is accessible and writable.' : (result.error ?? 'Device not accessible.'),
+        msg: result.success ? 'Device is accessible.' : (result.error ?? 'Device not accessible.'),
       })
     } catch (err) {
       setFeedback({ path: devPath, ok: false, msg: String(err) })
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function handleTestPrint() {
+    setWorking('testprint')
+    setFeedback(null)
+    try {
+      const result = await window.electronAPI.printZpl({ zpl: generateTestZpl(), qty: 1 })
+      if (result.success) {
+        localStorage.setItem(TEST_PRINT_KEY, '1')
+        setTestPrintSent(true)
+        setFeedback({ path: '', ok: true, msg: 'Test label sent — check the printer.' })
+      } else {
+        setFeedback({ path: '', ok: false, msg: result.error ?? 'Test print failed.' })
+      }
+    } catch (err) {
+      setFeedback({ path: '', ok: false, msg: String(err) })
     } finally {
       setWorking(null)
     }
@@ -122,10 +166,48 @@ export default function PrinterTab() {
     setManualPath(manualPath.trim())
   }
 
+  function dismissChecklist() {
+    localStorage.setItem(CHECKLIST_DISMISS, '1')
+    setChecklistDismissed(true)
+  }
+
   const isLinux = navigator.userAgent.toLowerCase().includes('linux')
+  const setupComplete = !!currentDevice && testPrintSent
+  const showChecklist = !checklistDismissed || !setupComplete
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
+
+      {/* ── Setup checklist ── */}
+      {showChecklist && (
+        <SettingsCard
+          title="Setup Checklist"
+          right={
+            setupComplete
+              ? <button onClick={dismissChecklist} className={ui.neutralBtn}>Dismiss</button>
+              : undefined
+          }
+        >
+          <div className="flex flex-col gap-2">
+            <div className={c.checkRow(!!currentDevice)}>
+              <span className="text-base leading-none">{currentDevice ? '✓' : '○'}</span>
+              <span>Printer configured{currentDevice ? ` — ${currentDevice}` : ''}</span>
+            </div>
+            <div className={c.checkRow(testPrintSent)}>
+              <span className="text-base leading-none">{testPrintSent ? '✓' : '○'}</span>
+              <span>Test print sent</span>
+            </div>
+          </div>
+          {setupComplete && (
+            <div className="text-xs text-[#3fb950]">Setup complete — printer is ready.</div>
+          )}
+          {!setupComplete && (
+            <div className="text-xs text-[#6e7681]">
+              {!currentDevice ? 'Scan for printers below, then send a test print to confirm everything is working.' : 'Send a test print to confirm the printer is working.'}
+            </div>
+          )}
+        </SettingsCard>
+      )}
 
       {/* ── Current device ── */}
       <SettingsCard
@@ -143,21 +225,36 @@ export default function PrinterTab() {
           {currentDevice && currentWritable !== null && (
             <span className={c.pill(currentWritable)}>
               <span className={c.dot(currentWritable)} />
-              {currentWritable ? 'Writable' : 'Not writable'}
+              {currentWritable ? 'Ready' : 'Not accessible'}
             </span>
           )}
         </div>
+
+        {currentDevice && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleTestPrint}
+              disabled={!!working || !currentDevice}
+              className={ui.primaryBtn}
+            >
+              {working === 'testprint' ? 'Printing…' : 'Send Test Print'}
+            </button>
+            {feedback?.path === '' && (
+              <div className={`flex items-center gap-2 text-xs ${feedback.ok ? 'text-[#3fb950]' : 'text-[#f85149]'}`}>
+                <span>{feedback.ok ? '✓' : '✗'}</span>
+                <span>{feedback.msg}</span>
+              </div>
+            )}
+          </div>
+        )}
       </SettingsCard>
 
       {/* ── Device list ── */}
       <SettingsCard title="Detected Devices">
         {!scanned && !scanning && (
           <div className={c.emptyState}>
-            <div className={c.emptyTitle}>No scan performed yet</div>
-            <div className={c.emptyBody}>
-              Tap <strong>Scan Devices</strong> to detect connected USB label printers.
-              Make sure the printer is powered on and connected before scanning.
-            </div>
+            <div className={c.emptyTitle}>Scanning for printers…</div>
+            <div className={c.emptyBody}>Checking for connected USB label printers.</div>
           </div>
         )}
 
@@ -180,8 +277,7 @@ export default function PrinterTab() {
                 <strong className="text-[#adbac7]">Permission issue?</strong> On Ubuntu the printer device
                 may require group membership. Run:<br />
                 <span className={ui.mono}>sudo usermod -aG lp $USER</span><br />
-                then log out and back in, or run:<br />
-                <span className={ui.mono}>sudo chmod a+rw /dev/usb/lp0</span>
+                then log out and back in.
               </div>
             )}
           </div>
@@ -267,7 +363,7 @@ export default function PrinterTab() {
             <span className="text-[#adbac7] font-semibold">Windows</span> — Scanning auto-creates a
             {' '}<span className={ui.mono}>Zebra ZPL</span> print queue using the Generic Text Only driver,
             which passes raw ZPL bytes straight to the printer without rendering. No Zebra drivers needed.
-            If the printer is moved to a different USB port, scanning again will reassign the queue automatically.
+            If the printer is moved to a different USB port, scanning again reassigns the queue automatically.
           </p>
           <p>
             <span className="text-[#adbac7] font-semibold">Linux</span> — USB printers are exposed as

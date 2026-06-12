@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import SettingsCard from '../../../components/settings/SettingsCard'
 import { ui } from '../../../components/settings/styles'
 import { loadItems, loadUserCats, persist } from '../../Preppy/utils'
@@ -11,6 +11,17 @@ import {
 } from '../../Preppy/constants'
 import type { QuickSortField, QuickCardStyle, AppTheme, AccentColor } from '../../Preppy/constants'
 import { SHELF_LIFE_ITEMS, importShelfLifeItems } from '../../Preppy/shelfLifeGuide'
+import { LABEL_DATE_CALC_KEY } from '../../Preppy/labelDateCalc'
+
+const CONFIG_BACKUP_VERSION = 1
+
+const DISPLAY_PREF_KEYS = [
+  QUICK_SORT_FIELD_KEY,
+  QUICK_SORT_DIR_KEY,
+  QUICK_CARD_STYLE_KEY,
+  THEME_KEY,
+  ACCENT_KEY,
+] as const
 
 const classes = {
   result: (ok: boolean) =>
@@ -20,10 +31,12 @@ const classes = {
 }
 
 export default function GeneralTab() {
-  const [totalCount,   setTotalCount]   = useState(() => loadItems().length)
-  const [result,       setResult]       = useState<{ added: number; updated: number; skipped: number } | null>(null)
-  const [confirmClear, setConfirmClear] = useState(false)
-  const [resetMsg,     setResetMsg]     = useState<string | null>(null)
+  const [totalCount,     setTotalCount]     = useState(() => loadItems().length)
+  const [result,         setResult]         = useState<{ added: number; updated: number; skipped: number } | null>(null)
+  const [confirmClear,   setConfirmClear]   = useState(false)
+  const [resetMsg,       setResetMsg]       = useState<string | null>(null)
+  const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+  const importRef = useRef<HTMLInputElement>(null)
   const [sortField,    setSortField]    = useState<QuickSortField>(() => {
     const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as QuickSortField | null
     return v && QUICK_SORT_FIELDS.some(o => o.value === v) ? v : 'popular'
@@ -88,6 +101,92 @@ export default function GeneralTab() {
   function clearKeys(keys: string[], msg: string) {
     keys.forEach(k => localStorage.removeItem(k))
     setResetMsg(msg)
+  }
+
+  async function handleExportConfig() {
+    try {
+      const config = await window.electronAPI.getConfig() as Record<string, unknown> & {
+        printer?: { device?: string; labelhomeX?: number; labelhomeY?: number }
+      }
+      const updateSettings = await window.electronAPI.getUpdateSettings()
+      const backup = {
+        _version: CONFIG_BACKUP_VERSION,
+        _exported: new Date().toISOString(),
+        quickItems:        localStorage.getItem(ITEMS_KEY),
+        categories:        localStorage.getItem(CATS_KEY),
+        dateCalcSettings:  localStorage.getItem(LABEL_DATE_CALC_KEY),
+        displayPrefs: Object.fromEntries(
+          DISPLAY_PREF_KEYS.map(k => [k, localStorage.getItem(k)])
+        ),
+        printerDevice:  config.printer?.device ?? null,
+        labelHomeX:     config.printer?.labelhomeX ?? null,
+        labelHomeY:     config.printer?.labelhomeY ?? null,
+        updateSettings: {
+          repoOwner: updateSettings.repoOwner,
+          repoName:  updateSettings.repoName,
+        },
+      }
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `preppy-config-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setBackupMsg({ ok: true, text: 'Config exported — save the file somewhere safe.' })
+    } catch (err) {
+      setBackupMsg({ ok: false, text: `Export failed: ${err}` })
+    }
+  }
+
+  function handleImportConfig(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = async ev => {
+      try {
+        const text = ev.target?.result
+        if (typeof text !== 'string') throw new Error('Could not read file.')
+        const data = JSON.parse(text) as Record<string, unknown>
+        if (data._version !== CONFIG_BACKUP_VERSION) throw new Error('Unrecognised backup format.')
+
+        if (typeof data.quickItems === 'string')       localStorage.setItem(ITEMS_KEY, data.quickItems)
+        if (typeof data.categories === 'string')       localStorage.setItem(CATS_KEY, data.categories)
+        if (typeof data.dateCalcSettings === 'string') localStorage.setItem(LABEL_DATE_CALC_KEY, data.dateCalcSettings)
+
+        const prefs = data.displayPrefs as Record<string, string | null> | undefined
+        if (prefs) {
+          for (const k of DISPLAY_PREF_KEYS) {
+            if (typeof prefs[k] === 'string') localStorage.setItem(k, prefs[k]!)
+          }
+        }
+
+        if (typeof data.printerDevice === 'string' && data.printerDevice) {
+          await window.electronAPI.setPrinterDevice(data.printerDevice)
+        }
+        if (typeof data.labelHomeX === 'number' && typeof data.labelHomeY === 'number') {
+          await window.electronAPI.setLabelHome(data.labelHomeX, data.labelHomeY)
+        }
+        if (data.updateSettings && typeof data.updateSettings === 'object') {
+          const us = data.updateSettings as { repoOwner?: string; repoName?: string }
+          if (us.repoOwner || us.repoName) {
+            await window.electronAPI.saveUpdateSettings({
+              repoOwner: us.repoOwner ?? '',
+              repoName:  us.repoName  ?? '',
+              token:     '',
+            })
+          }
+        }
+
+        setBackupMsg({ ok: true, text: 'Config imported — reloading…' })
+        setTimeout(() => window.location.reload(), 800)
+      } catch (err) {
+        setBackupMsg({ ok: false, text: `Import failed: ${err}` })
+      } finally {
+        if (importRef.current) importRef.current.value = ''
+      }
+    }
+    reader.readAsText(file)
   }
 
   return (
@@ -247,6 +346,34 @@ export default function GeneralTab() {
           >Reset panel layout</button>
         </div>
         {resetMsg && <div className={ui.note}>{resetMsg}</div>}
+      </SettingsCard>
+
+      {/* ── Config backup ── */}
+      <SettingsCard
+        title="Config Backup"
+        desc="Export your full configuration — quick items, categories, display preferences, printer device, and update settings — to a JSON file. Import it on another device to replicate the setup instantly."
+      >
+        <div className={ui.actionRow}>
+          <button onClick={handleExportConfig} className={ui.primaryBtn}>
+            Export config
+          </button>
+          <button onClick={() => importRef.current?.click()} className={ui.neutralBtn}>
+            Import config
+          </button>
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleImportConfig}
+          />
+        </div>
+        {backupMsg && (
+          <div className={classes.result(backupMsg.ok)}>{backupMsg.text}</div>
+        )}
+        <div className="text-[#6e7681] text-xs">
+          The exported file does not include your GitHub token or usage history. Import restores all other settings and reloads the app.
+        </div>
       </SettingsCard>
 
     </div>

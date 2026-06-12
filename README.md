@@ -170,44 +170,41 @@ Three templates ship by default: **IX** (In Use), **OX** (Opened/Prepped), **UX*
 
 ### Windows Tablets
 
-Run both scripts from an **Administrator** PowerShell session. The kiosk configuration script must come first and requires a restart before Preppy is installed.
+Run from an **Administrator** PowerShell session. One script does everything: hardens the OS, downloads the latest release, installs the printer driver, and registers a boot autostart.
 
-**Step 1 — Harden the OS** (disables auto-restart on Windows Update, prevents sleep/hibernate, disables screensaver and lock screen, disables fast startup):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1
-```
-
-To also disable automatic update downloads entirely (recommended if updates have caused printer issues):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1 -DisableUpdates
-```
-
-To configure passwordless auto-login so the tablet boots straight into Preppy:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1 `
-    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
-```
-
-The script will prompt to restart. **Restart before continuing.**
-
-**Step 2 — Install Preppy** (downloads the latest release from GitHub, installs to `%LOCALAPPDATA%\Preppy`, registers a Task Scheduler autostart task that launches in kiosk mode at every login):
+**Step 1 — Install Preppy** (OS hardening + download + autostart in one command):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
 ```
 
-For a private repository, pass your GitHub token:
+Common options:
 
 ```powershell
+# Disable automatic Windows Update downloads (recommended if updates have caused printer issues):
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -DisableUpdates
+
+# Auto-login so the tablet boots straight into Preppy without a password prompt:
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 `
+    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
+
+# Private GitHub repository:
 powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -GitHubToken "ghp_..."
+
+# All options combined:
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 `
+    -GitHubToken "ghp_..." -DisableUpdates `
+    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
 ```
 
-After the next login, Preppy starts automatically in fullscreen kiosk mode.
+The script will prompt to restart. After the next login, Preppy starts automatically in fullscreen kiosk mode.
 
-**Step 3 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver (installed in Step 2), and selects it. No Zebra drivers needed, no manual configuration.
+**Step 2 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver (installed in Step 1), and selects it. No Zebra drivers needed, no manual configuration.
+
+> **Re-applying OS hardening** (e.g. after a Windows feature update resets policies) without reinstalling Preppy:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1
+> ```
 
 **To uninstall:**
 

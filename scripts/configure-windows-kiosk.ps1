@@ -4,6 +4,11 @@
     restarts, prevents sleep/hibernate, and locks down power settings for always-on
     kiosk operation.
 
+.DESCRIPTION
+    NOTE: install-windows.ps1 already runs all of these steps as part of a fresh
+    install. Use this script only to re-apply OS hardening on an existing install
+    without reinstalling Preppy (e.g. after a Windows feature update resets policies).
+
 .PARAMETER AutoLogin
     Enable automatic login (no password prompt on boot). Requires -AutoLoginUser
     and -AutoLoginPassword.

@@ -57,7 +57,9 @@ export default function PrinterTab() {
       setCurrentDevice(dev)
       setManualPath(dev)
     }).catch(() => {})
-  }, [])
+    // Auto-scan on first open so detected printers show immediately
+    handleScan()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentDevice) { setCurrentWritable(null); return }
@@ -237,7 +239,7 @@ export default function PrinterTab() {
             value={manualPath}
             onChange={e => setManualPath(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') void handleManualSet() }}
-            placeholder={isLinux ? '/dev/usb/lp0' : 'USB001'}
+            placeholder={isLinux ? '/dev/usb/lp0' : 'Zebra ZPL'}
             className={`${ui.input} font-mono`}
             spellCheck={false}
           />
@@ -248,7 +250,7 @@ export default function PrinterTab() {
         <div className="text-[#6e7681] text-xs leading-relaxed">
           {isLinux
             ? 'Linux: USB printers appear at /dev/usb/lp0, /dev/usb/lp1 … Bluetooth via /dev/rfcomm0.'
-            : 'Windows: USB printers use port names like USB001. COM ports are also supported.'}
+            : 'Windows: Enter the print queue name shown in the Detected Devices list above (e.g. Zebra ZPL). Scanning auto-creates the queue when a printer is connected.'}
         </div>
         {feedback && feedback.path === manualPath.trim() && (
           <div className={c.feedbackRow(feedback.ok)}>
@@ -262,16 +264,16 @@ export default function PrinterTab() {
       <SettingsCard title="Notes">
         <div className="text-xs text-[#6e7681] leading-relaxed flex flex-col gap-2">
           <p>
-            <span className="text-[#adbac7] font-semibold">WiFi / Network printers</span> — Zebra network
-            printers accept raw ZPL on TCP port 9100. Enter the IP address in the format{' '}
-            <span className={ui.mono}>tcp://192.168.1.100:9100</span>. Network print support
-            requires a code change to the printer service (currently file-based only).
+            <span className="text-[#adbac7] font-semibold">Windows</span> — Scanning auto-creates a
+            {' '}<span className={ui.mono}>Zebra ZPL</span> print queue using the Generic Text Only driver,
+            which passes raw ZPL bytes straight to the printer without rendering. No Zebra drivers needed.
+            If the printer is moved to a different USB port, scanning again will reassign the queue automatically.
           </p>
           <p>
-            <span className="text-[#adbac7] font-semibold">Windows</span> — Raw USB write paths differ
-            from Linux. Set the port name (e.g. <span className={ui.mono}>USB001</span>) found in
-            Devices &amp; Printers. The printer service will need updating to use the Windows spooler
-            or direct port write for full Windows support.
+            <span className="text-[#adbac7] font-semibold">Linux</span> — USB printers are exposed as
+            raw character devices at <span className={ui.mono}>/dev/usb/lp0</span> with no driver required.
+            If the device is not writable, run{' '}
+            <span className={ui.mono}>sudo usermod -aG lp $USER</span> and log out.
           </p>
         </div>
       </SettingsCard>

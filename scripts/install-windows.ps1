@@ -86,6 +86,22 @@ Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $ExePath `
 
 Write-Host "Download complete." -ForegroundColor Green
 
+# ── Printer driver ───────────────────────────────────────────────────────────
+# Install Generic / Text Only driver so Preppy can create a raw-ZPL print queue
+# without a Zebra-specific driver. The driver ships with every Windows install;
+# this is a no-op if it is already present.
+Write-Host "Installing printer driver..."
+try {
+    if (-not (Get-PrinterDriver -Name "Generic / Text Only" -ErrorAction SilentlyContinue)) {
+        Add-PrinterDriver -Name "Generic / Text Only" -ErrorAction Stop
+        Write-Host "  Driver installed." -ForegroundColor Green
+    } else {
+        Write-Host "  Driver already present." -ForegroundColor Green
+    }
+} catch {
+    Write-Warning "Could not install printer driver (non-fatal): $_"
+}
+
 # ── Task Scheduler auto-start ─────────────────────────────────────────────────
 if (-not $NoAutoStart) {
     Write-Host "Configuring auto-start (Task Scheduler)..."

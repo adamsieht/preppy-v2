@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import { execSync } from 'child_process'
 import { getConfig } from './config.service'
 
@@ -147,7 +148,53 @@ function scanLinux(currentDevice: string): UsbPrinterDevice[] {
   return devices
 }
 
+// Silently ensures a "Zebra ZPL" print queue exists pointing to the active USB port.
+// Called at the start of every Windows scan so setup is fully automatic.
+function tryAutoSetupWindowsQueue(): void {
+  const script = `
+$queueName  = 'Zebra ZPL'
+$driverName = 'Generic / Text Only'
+
+# Nothing to do if no USB printer is physically connected
+$pnpCount = (Get-PnpDevice -Class Printer -Status OK -ErrorAction SilentlyContinue | Measure-Object).Count
+if ($pnpCount -eq 0) { exit 0 }
+
+# Enumerate USB printer ports Windows has created for connected devices
+$ports = @(Get-PrinterPort -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '^USB\\d+' } |
+    Select-Object -ExpandProperty Name)
+if ($ports.Count -eq 0) { exit 0 }
+
+# Install Generic / Text Only driver if not present (ships with every Windows install)
+if (-not (Get-PrinterDriver -Name $driverName -ErrorAction SilentlyContinue)) {
+    Add-PrinterDriver -Name $driverName -ErrorAction Stop
+}
+
+$existing = Get-Printer -Name $queueName -ErrorAction SilentlyContinue
+if ($existing) {
+    # If the queue's port was removed (printer moved), reassign to the first live USB port
+    if ($ports -notcontains $existing.PortName) {
+        Set-Printer -Name $queueName -PortName $ports[0]
+    }
+} else {
+    Add-Printer -Name $queueName -DriverName $driverName -PortName $ports[0]
+}
+`.trim()
+
+  const tmp = path.join(os.tmpdir(), '_preppy_autosetup.ps1')
+  try {
+    fs.writeFileSync(tmp, script, 'utf-8')
+    execSync(
+      `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmp}"`,
+      { timeout: 15000 },
+    )
+  } catch { /* best-effort — scan still returns queues even if setup fails */ }
+  finally { try { fs.unlinkSync(tmp) } catch {} }
+}
+
 function scanWindows(currentDevice: string): UsbPrinterDevice[] {
+  tryAutoSetupWindowsQueue()
+
   const devices: UsbPrinterDevice[] = []
 
   // Try wmic first (available on Windows 7-10; deprecated but still present on 11)

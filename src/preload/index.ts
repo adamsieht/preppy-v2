@@ -4,6 +4,7 @@ import type { PrintArgs, LabelTemplate, PreviewResult } from '../main/services/p
 import type { Sensor, SensorLog, PrintJob, WifiCredentials, DurationCount } from '../main/services/db.service'
 import type { UsbPrinterDevice } from '../main/services/usb-detection.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
+import type { UpdateSettings, UpdateCheckResult } from '../main/services/updater.service'
 
 export interface ElectronAPI {
   print: (args: { template: LabelTemplate; durationHrs: number; qty: number; expiryIso?: string }) => Promise<{ success: boolean; error?: string }>
@@ -30,6 +31,13 @@ export interface ElectronAPI {
   openSystemTimeSettings: () => Promise<{ success: boolean; error?: string }>
   enableNtp: () => Promise<{ success: boolean; error?: string }>
   getPlatform: () => string
+  checkForUpdate: () => Promise<{ success: boolean; result?: UpdateCheckResult; error?: string }>
+  downloadUpdate: (url: string) => Promise<{ success: boolean; error?: string }>
+  onUpdateProgress: (cb: (data: { downloaded: number; total: number }) => void) => () => void
+  applyUpdate: () => Promise<{ success: boolean; error?: string }>
+  getUpdateSettings: () => Promise<UpdateSettings>
+  saveUpdateSettings: (s: UpdateSettings) => Promise<{ success: boolean }>
+  getAppVersion: () => Promise<string>
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -83,4 +91,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openSystemTimeSettings:()            => ipcRenderer.invoke(IPC.SYSTEM_OPEN_TIME_SETTINGS),
   enableNtp:             ()            => ipcRenderer.invoke(IPC.SYSTEM_ENABLE_NTP),
   getPlatform:           ()            => process.platform,
+  checkForUpdate: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
+  downloadUpdate: (url: string) => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD, { url }),
+  onUpdateProgress: (cb: (data: { downloaded: number; total: number }) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { downloaded: number; total: number }) => cb(data)
+    ipcRenderer.on(IPC.UPDATE_PROGRESS, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_PROGRESS, handler)
+  },
+  applyUpdate: () => ipcRenderer.invoke(IPC.UPDATE_APPLY),
+  getUpdateSettings: () => ipcRenderer.invoke(IPC.UPDATE_GET_SETTINGS),
+  saveUpdateSettings: (s: UpdateSettings) => ipcRenderer.invoke(IPC.UPDATE_SAVE_SETTINGS, s),
+  getAppVersion: () => ipcRenderer.invoke(IPC.APP_VERSION),
 } satisfies ElectronAPI)

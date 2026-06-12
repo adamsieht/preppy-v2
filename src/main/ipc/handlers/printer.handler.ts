@@ -8,6 +8,7 @@ const PrintArgsSchema = z.object({
   template: z.enum(['IX', 'OX', 'UX']),
   durationHrs: z.number().min(0.25).max(720),
   qty: z.number().int().min(1).max(100),
+  expiryIso: z.string().optional(),
 })
 
 const PrintZplArgsSchema = z.object({

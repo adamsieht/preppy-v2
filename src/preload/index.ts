@@ -6,7 +6,7 @@ import type { UsbPrinterDevice } from '../main/services/usb-detection.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
 
 export interface ElectronAPI {
-  print: (args: { template: LabelTemplate; durationHrs: number; qty: number }) => Promise<{ success: boolean; error?: string }>
+  print: (args: { template: LabelTemplate; durationHrs: number; qty: number; expiryIso?: string }) => Promise<{ success: boolean; error?: string }>
   printZpl: (args: { zpl: string; qty: number }) => Promise<{ success: boolean; error?: string }>
   previewPrint: (args: { template: LabelTemplate; durationHrs: number }) => Promise<PreviewResult>
   getPrintHistory: (limit?: number, offset?: number) => Promise<PrintJob[]>

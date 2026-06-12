@@ -19,12 +19,13 @@ import ScaledLabelPreview from '../../components/ScaledLabelPreview'
 import Clock from '../../components/Clock'
 import PrinterStatus from '../../components/PrinterStatus'
 import { loadActiveLayout } from './labelDefs'
-import { loadStaticPresets, buildStaticLayout } from './staticPresets'
+import { BUILTIN_STATIC_PRESETS, loadStaticPresets, buildStaticLayout } from './staticPresets'
 import type { StaticPreset } from './staticPresets'
 import { generateZpl } from './labelZpl'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
 import type { LabelTemplate, CustomPreset, DisplayPreset, PrintQtyTarget, BundleEntry, TemplateHrs, ToastState } from './types'
 import { TEMPLATES, DEFAULT_PRESETS, DEFAULT_DURATIONS, PRESETS_KEY, PRESET_ORDER_KEY, HIDDEN_PRESETS_KEY, PANEL_COLLAPSED_KEY, LEFT_COLLAPSED_KEY, WIDTH_KEY } from './constants'
+import { loadDateCalcSettings, resolveExpiry, wouldExceedMidnight } from './labelDateCalc'
 import { loadStored, persist, autoLabel, fmtDuration } from './utils'
 import { classes } from './Preppy.styles'
 import AddPresetPage from '../AddPresetPage'
@@ -336,6 +337,16 @@ export default function Preppy() {
 
   // ── Print handlers ────────────────────────────────────────────────────────
   async function handlePrint(durationHrs: number, qty: number, tpl = template) {
+    const dateCalcSettings = loadDateCalcSettings()
+
+    // EOD redirect: same-day label would cross midnight → print the EOD static label
+    if (wouldExceedMidnight(durationHrs, dateCalcSettings)) {
+      const eodPreset = BUILTIN_STATIC_PRESETS.find(sp => sp.id === 'static-eod')
+      if (eodPreset) return handlePrintStatic(eodPreset, qty)
+    }
+
+    const expiryIso = resolveExpiry(durationHrs, dateCalcSettings).toISOString()
+
     const id  = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const lbl = `${tpl} ${fmtDuration(durationHrs)}`
 
@@ -359,7 +370,7 @@ export default function Preppy() {
     })
 
     try {
-      const result = await window.electronAPI.print({ template: tpl, durationHrs, qty })
+      const result = await window.electronAPI.print({ template: tpl, durationHrs, qty, expiryIso })
       if (result.success) {
         await animDone   // wait for animation to finish before showing checkmark
         setToasts(prev => prev.map(t => t.id === id ? { ...t, done: qty, state: 'success' } : t))
@@ -376,17 +387,20 @@ export default function Preppy() {
   }
 
   async function handlePrintBundle(entries: BundleEntry[], multiplier: number) {
-    const id       = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const totalQty = entries.reduce((sum, e) => sum + e.qty * multiplier, 0)
+    const id             = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const totalQty       = entries.reduce((sum, e) => sum + e.qty * multiplier, 0)
+    const dateCalcSettings = loadDateCalcSettings()
 
     setToasts(prev => [...prev, { id, qty: totalQty, done: 0, state: 'printing', label: 'Bundle' }])
 
     let done = 0
     for (const entry of entries) {
-      const tpl = entry.template ?? 'IX'
-      const qty = entry.qty * multiplier
+      const tpl         = entry.template ?? 'IX'
+      const qty         = entry.qty * multiplier
+      const entryHrs    = entry.hrs[tpl]
+      const expiryIso   = resolveExpiry(entryHrs, dateCalcSettings).toISOString()
       try {
-        const result = await window.electronAPI.print({ template: tpl, durationHrs: entry.hrs[tpl], qty })
+        const result = await window.electronAPI.print({ template: tpl, durationHrs: entryHrs, qty, expiryIso })
         if (!result.success) {
           setToasts(prev => prev.map(t => t.id === id ? { ...t, state: 'error', errorMsg: result.error ?? 'Print failed' } : t))
           return

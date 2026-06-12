@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
 import type { LabelLayout, LabelElement, LabelValues, DowStripConfig } from './labelTypes'
 import { dayjsDayToMonFirst, getLabelSize } from './labelDefs'
+import { loadDateCalcSettings, resolveExpiry } from './labelDateCalc'
 
 // ── Date format map (dayjs tokens) ──────────────────────────────────────────
 export const DATE_FORMATS: { key: string; label: string; fmt: string }[] = [
@@ -96,7 +97,7 @@ export function generateZpl(
   labelHomeY = 0,
 ): string {
   const now    = dayjs()
-  const expiry = now.add(values.durationHrs, 'hour')
+  const expiry = resolveExpiry(values.durationHrs, loadDateCalcSettings(), now)
   const labelW = getLabelSize(layout.sizeKey).dotsW
 
   const lines: string[] = ['^XA']
@@ -122,10 +123,10 @@ export function generateZpl(
 // ── Preview-only value resolver (used by browser preview) ───────────────────
 export function resolvePreviewText(el: LabelElement, values: LabelValues): string {
   const now    = dayjs()
-  const expiry = now.add(values.durationHrs, 'hour')
+  const expiry = resolveExpiry(values.durationHrs, loadDateCalcSettings(), now)
   return resolveText(el, values, now, expiry)
 }
 
-export function resolvePreviewExpiry(durationHrs: number) {
-  return dayjs().add(durationHrs, 'hour')
+export function resolvePreviewExpiry(durationHrs: number): dayjs.Dayjs {
+  return resolveExpiry(durationHrs, loadDateCalcSettings())
 }

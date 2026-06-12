@@ -180,7 +180,7 @@ const cls = {
 
 function LegacyPreview({ template, durationHrs }: { template: LabelTemplate; durationHrs: number }) {
   const now    = dayjs()
-  const expiry = now.add(durationHrs, 'hour')
+  const expiry = resolvePreviewExpiry(durationHrs)
   return (
     <div className={cls.wrapper}>
       <div className={cls.headerRow}>

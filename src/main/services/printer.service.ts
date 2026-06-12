@@ -12,6 +12,7 @@ export interface PrintArgs {
   template: LabelTemplate
   durationHrs: number
   qty: number
+  expiryIso?: string
 }
 
 export interface PrintResult {
@@ -26,9 +27,9 @@ function injectLabelHome(zpl: string, x: number, y: number): string {
   return zpl.replace(/(\^XA\r?\n?)/, `$1^LH${x},${y}\n`)
 }
 
-function fillTemplate(raw: string, durationHrs: number): string {
-  const now = dayjs()
-  const expiry = now.add(durationHrs, 'hour')
+function fillTemplate(raw: string, durationHrs: number, expiryIso?: string): string {
+  const now    = dayjs()
+  const expiry = expiryIso ? dayjs(expiryIso) : now.add(durationHrs, 'hour')
   return raw
     .replace(/\{\{DATE\}\}/g, now.format('MM/DD/YY'))
     .replace(/\{\{TIME\}\}/g, now.format('hh:mm A'))
@@ -62,10 +63,10 @@ export function preview(args: Omit<PrintArgs, 'qty'>): PreviewResult {
     return { success: false, error: `Failed to read ZPL template: ${String(err)}` }
   }
 
-  const now = dayjs()
-  const expiry = now.add(args.durationHrs, 'hour')
+  const now    = dayjs()
+  const expiry = args.expiryIso ? dayjs(args.expiryIso) : now.add(args.durationHrs, 'hour')
   const zpl = injectLabelHome(
-    fillTemplate(raw, args.durationHrs),
+    fillTemplate(raw, args.durationHrs, args.expiryIso),
     config.printer.labelhomeX ?? 0,
     config.printer.labelhomeY ?? 0,
   )
@@ -106,7 +107,7 @@ export function print(args: PrintArgs): PrintResult {
   }
 
   const filled = injectLabelHome(
-    fillTemplate(raw, args.durationHrs),
+    fillTemplate(raw, args.durationHrs, args.expiryIso),
     config.printer.labelhomeX ?? 0,
     config.printer.labelhomeY ?? 0,
   )

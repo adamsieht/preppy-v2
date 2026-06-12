@@ -12,6 +12,11 @@ import {
   buildStaticLayout, isBuiltinStaticPreset,
 } from '../../Preppy/staticPresets'
 import type { StaticPreset } from '../../Preppy/staticPresets'
+import {
+  loadDateCalcSettings, saveDateCalcSettings,
+  CUTOFF_OPTIONS, MINUTE_ROUNDING_OPTIONS,
+} from '../../Preppy/labelDateCalc'
+import type { LabelDateCalcSettings } from '../../Preppy/labelDateCalc'
 
 function loadCustomLayouts(): LabelLayout[] {
   try { return JSON.parse(localStorage.getItem(LABEL_LAYOUTS_KEY) ?? '[]') } catch { return [] }
@@ -42,6 +47,15 @@ export default function LabelsTab() {
   const [customStatics, setCustomStatics] = useState<StaticPreset[]>(loadCustomStaticPresets)
   const [staticName, setStaticName]       = useState('')
   const [staticText, setStaticText]       = useState('')
+
+  // Date calculation settings
+  const [dateCalc, setDateCalc] = useState<LabelDateCalcSettings>(loadDateCalcSettings)
+
+  function updateDateCalc(patch: Partial<LabelDateCalcSettings>) {
+    const next = { ...dateCalc, ...patch }
+    setDateCalc(next)
+    saveDateCalcSettings(next)
+  }
 
   function addStaticPreset() {
     const name = staticName.trim()
@@ -191,6 +205,67 @@ export default function LabelsTab() {
         </div>
       </SettingsCard>
 
+      {/* Date calculation */}
+      <SettingsCard
+        title="Label Date Calculation"
+        desc="Controls how expiry dates are calculated when printing labels."
+      >
+        {/* Mode toggle */}
+        <div className="flex flex-col gap-3">
+          <Toggle
+            label="Day-first counting"
+            description='Count the current day as day 1. A "2 Day" label printed today expires tomorrow instead of the day after tomorrow.'
+            checked={dateCalc.mode === 'day-first'}
+            onChange={v => updateDateCalc({ mode: v ? 'day-first' : 'standard' })}
+          />
+
+          {/* Cutoff time — only relevant in day-first mode */}
+          {dateCalc.mode === 'day-first' && (
+            <div className="flex flex-col gap-1 pl-7">
+              <div className={ui.fieldLabel}>Next-day cutoff time</div>
+              <select
+                className={ui.input + ' w-40 cursor-pointer'}
+                value={dateCalc.cutoffHour}
+                onChange={e => updateDateCalc({ cutoffHour: Number(e.target.value) })}
+              >
+                {CUTOFF_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <div className="text-[11px] text-[#768390] leading-relaxed">
+                After this time, multi-day labels switch to the next-day calculation
+                (e.g. a "2 Day" label starts targeting the day after tomorrow).
+              </div>
+            </div>
+          )}
+
+          {/* Minute rounding */}
+          <div className="flex flex-col gap-1">
+            <div className={ui.fieldLabel}>Same-day label rounding</div>
+            <select
+              className={ui.input + ' w-40 cursor-pointer'}
+              value={dateCalc.minuteRounding}
+              onChange={e => updateDateCalc({ minuteRounding: Number(e.target.value) as LabelDateCalcSettings['minuteRounding'] })}
+            >
+              {MINUTE_ROUNDING_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <div className="text-[11px] text-[#768390]">
+              Round same-day expiry times up to the nearest interval (e.g. 4h printed at 2:17 PM → 6:30 PM with 15-min rounding).
+            </div>
+          </div>
+
+          {/* EOD on midnight */}
+          <Toggle
+            label="Use EOD label if same-day expiry exceeds midnight"
+            description='When a same-day label (e.g. "4 Hour") would expire after midnight, print the End of Day static label instead.'
+            checked={dateCalc.eodOnMidnight}
+            onChange={v => updateDateCalc({ eodOnMidnight: v })}
+          />
+        </div>
+      </SettingsCard>
+
       {/* Static presets */}
       <SettingsCard
         title="Static Presets"
@@ -318,5 +393,37 @@ function LayoutRow({
         {onDelete && <button className={ui.dangerBtn} onClick={onDelete}>Delete</button>}
       </div>
     </div>
+  )
+}
+
+// ── Toggle ───────────────────────────────────────────────────────────────────
+function Toggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label:       string
+  description?: string
+  checked:     boolean
+  onChange:    (v: boolean) => void
+}) {
+  return (
+    <label className="flex items-start gap-3 cursor-pointer select-none group">
+      <div className="relative mt-0.5 shrink-0">
+        <input
+          type="checkbox"
+          className="sr-only peer"
+          checked={checked}
+          onChange={e => onChange(e.target.checked)}
+        />
+        <div className="w-10 h-5 bg-[#21262d] border border-[#30363d] rounded-full peer-checked:bg-[#28a745] peer-checked:border-[#28a745] transition-colors" />
+        <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+      </div>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm text-[#e6edf3] group-hover:text-white transition-colors">{label}</span>
+        {description && <span className="text-[11px] text-[#768390] leading-relaxed">{description}</span>}
+      </div>
+    </label>
   )
 }

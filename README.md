@@ -1,6 +1,6 @@
 # preppy-v2
 
-A touch-first food service kiosk application built on Electron + React. Designed to run on a Raspberry Pi or any embedded Linux device with a 7–10" touchscreen. Manages label printing, temperature monitoring, prep lists, and WiFi configuration — all from a clean, tap-friendly interface optimized for kitchen use.
+A touch-first food service kiosk application built on Electron + React. Designed to run on Windows tablets, Raspberry Pi, or any embedded Linux device with a 7–10" touchscreen. Manages label printing, temperature monitoring, prep lists, and WiFi configuration — all from a clean, tap-friendly interface optimized for kitchen use.
 
 ---
 
@@ -169,6 +169,91 @@ Three templates ship by default:
 
 ---
 
+## Deployment
+
+### Windows Tablets
+
+Run both scripts from an **Administrator** PowerShell session. The kiosk configuration script must come first and requires a restart before Preppy is installed.
+
+**Step 1 — Harden the OS** (disables auto-restart on Windows Update, prevents sleep/hibernate, disables screensaver and lock screen, disables fast startup):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1
+```
+
+To also disable automatic update downloads entirely (recommended if updates have caused printer issues):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1 -DisableUpdates
+```
+
+To configure passwordless auto-login so the tablet boots straight into Preppy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1 `
+    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
+```
+
+The script will prompt to restart. **Restart before continuing.**
+
+**Step 2 — Install Preppy** (downloads the latest release from GitHub, installs to `%LOCALAPPDATA%\Preppy`, registers a Task Scheduler autostart task that launches in kiosk mode at every login):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
+```
+
+For a private repository, pass your GitHub token:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -GitHubToken "ghp_..."
+```
+
+After the next login, Preppy starts automatically in fullscreen kiosk mode.
+
+**To uninstall:**
+
+```powershell
+Unregister-ScheduledTask -TaskName 'Preppy' -Confirm:$false
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Preppy"
+```
+
+---
+
+### Linux (Raspberry Pi / Debian / Ubuntu)
+
+Run the installer as your normal user (no `sudo` required). It detects architecture automatically (`x86_64` → x64, `aarch64` → arm64), downloads the matching AppImage from GitHub Releases, and creates a `~/.config/autostart/preppy.desktop` entry so Preppy starts in kiosk mode on login.
+
+```bash
+bash scripts/install-linux.sh
+```
+
+For a private repository:
+
+```bash
+bash scripts/install-linux.sh --token=ghp_...
+```
+
+To install without kiosk mode (normal windowed):
+
+```bash
+bash scripts/install-linux.sh --no-kiosk
+```
+
+**To uninstall:**
+
+```bash
+rm ~/.config/autostart/preppy.desktop
+rm -rf ~/.local/share/preppy
+```
+
+---
+
+### In-App Updates
+
+Once installed, open **Settings → Updates** to check for new releases, download, and apply them. The app swaps itself out on next quit — no reinstall needed.
+
+---
+
 ## Development Setup
 
 **Prerequisites:** Node.js 20+, npm 10+
@@ -215,10 +300,13 @@ npm run test:coverage # with coverage report
 ## Building
 
 ```bash
-npm run build        # TypeScript compile + Vite bundle
+npm run build                 # TypeScript compile + Vite bundle only
+npm run package:win           # Windows portable .exe  → release/
+npm run package:linux         # Linux AppImage x64     → release/
+npm run package:linux:arm64   # Linux AppImage arm64   → release/
 ```
 
-For packaging into a distributable (Raspberry Pi `.deb`, etc.) integrate [electron-builder](https://www.electron.build/) — not included by default.
+Pushing a `v*` tag triggers the GitHub Actions workflows in `.github/workflows/` which build all platforms and attach the artifacts to a GitHub Release automatically.
 
 ---
 

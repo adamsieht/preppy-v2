@@ -121,7 +121,7 @@ export async function checkForUpdate(settings: UpdateSettings): Promise<UpdateCh
   const publishedAt: string = data.published_at ?? ''
 
   const assets: Array<{ name: string; browser_download_url: string; size: number }> = data.assets ?? []
-  const exeAsset = assets.find(a => a.name.endsWith('.exe'))
+  const exeAsset = findPlatformAsset(assets)
 
   const downloadUrl = exeAsset?.browser_download_url ?? ''
   const fileSize = exeAsset?.size ?? 0
@@ -139,9 +139,35 @@ export async function checkForUpdate(settings: UpdateSettings): Promise<UpdateCh
   }
 }
 
+function findPlatformAsset(
+  assets: Array<{ name: string; browser_download_url: string; size: number }>,
+) {
+  if (process.platform === 'win32') {
+    return assets.find(a => a.name.endsWith('.exe'))
+  }
+  if (process.platform === 'linux') {
+    const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+    return (
+      assets.find(a => a.name.endsWith('.AppImage') && a.name.includes(arch)) ??
+      assets.find(a => a.name.endsWith('.AppImage'))
+    )
+  }
+  return undefined
+}
+
 export function getUpdateFilePath(): string {
-  const dir = app.isPackaged ? path.dirname(process.execPath) : app.getPath('temp')
-  return path.join(dir, 'Preppy-portable-update.exe')
+  let dir: string
+  if (app.isPackaged) {
+    dir = process.platform === 'linux' && process.env.APPIMAGE
+      ? path.dirname(process.env.APPIMAGE)
+      : path.dirname(process.execPath)
+  } else {
+    dir = app.getPath('temp')
+  }
+  const name = process.platform === 'win32'
+    ? 'Preppy-portable-update.exe'
+    : 'Preppy-update.AppImage'
+  return path.join(dir, name)
 }
 
 export function hasDownloadedUpdate(): boolean {
@@ -224,13 +250,16 @@ export function downloadUpdate(
 }
 
 export function applyUpdate(): void {
-  if (!app.isPackaged) {
-    throw new Error('applyUpdate is only available in packaged builds')
-  }
+  if (!app.isPackaged) throw new Error('applyUpdate is only available in packaged builds')
+  if (process.platform === 'win32') return applyUpdateWindows()
+  if (process.platform === 'linux')  return applyUpdateLinux()
+  throw new Error(`Auto-update is not supported on ${process.platform}`)
+}
 
+function applyUpdateWindows(): void {
   const currentExe = process.execPath
-  const updateExe = getUpdateFilePath()
-  const batchPath = path.join(path.dirname(currentExe), '_preppy_update.bat')
+  const updateExe  = getUpdateFilePath()
+  const batchPath  = path.join(path.dirname(currentExe), '_preppy_update.bat')
 
   const batch = [
     '@echo off',
@@ -241,12 +270,29 @@ export function applyUpdate(): void {
   ].join('\r\n')
 
   fs.writeFileSync(batchPath, batch, 'utf-8')
+  spawn('cmd.exe', ['/c', batchPath], { detached: true, windowsHide: true, stdio: 'ignore' }).unref()
+  app.quit()
+}
 
-  spawn('cmd.exe', ['/c', batchPath], {
-    detached: true,
-    windowsHide: true,
-    stdio: 'ignore',
-  }).unref()
+function applyUpdateLinux(): void {
+  const appImage = process.env.APPIMAGE
+  if (!appImage) throw new Error('Not running as AppImage — cannot auto-update')
 
+  const updatePath = getUpdateFilePath()
+  const scriptPath = path.join(path.dirname(appImage), '_preppy_update.sh')
+  const extraArgs  = process.argv.filter(a => a.startsWith('--')).join(' ')
+
+  const script = [
+    '#!/bin/bash',
+    'sleep 2',
+    `mv -f "${updatePath}" "${appImage}"`,
+    `chmod +x "${appImage}"`,
+    `"${appImage}"${extraArgs ? ' ' + extraArgs : ''} &`,
+    'rm -f "$0"',
+  ].join('\n')
+
+  fs.writeFileSync(scriptPath, script, 'utf-8')
+  fs.chmodSync(scriptPath, '755')
+  spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' }).unref()
   app.quit()
 }

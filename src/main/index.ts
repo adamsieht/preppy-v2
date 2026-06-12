@@ -16,12 +16,16 @@ import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 
-const isDev = process.env.NODE_ENV === 'development'
+const isDev    = process.env.NODE_ENV === 'development'
+const isKiosk  = !isDev && process.argv.includes('--kiosk')
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1024,
     height: 768,
+    fullscreen:      isKiosk,
+    kiosk:           isKiosk,
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,

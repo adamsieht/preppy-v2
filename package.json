@@ -14,7 +14,11 @@
     "test:coverage": "vitest run --coverage",
     "postinstall": "node scripts/install-natives.js",
     "package:win": "vite build && electron-builder --win --x64",
-    "release:win": "vite build && electron-builder --win --x64 --publish=always"
+    "package:linux": "vite build && electron-builder --linux --x64",
+    "package:linux:arm64": "vite build && electron-builder --linux --arm64",
+    "release:win": "vite build && electron-builder --win --x64 --publish=always",
+    "release:linux": "vite build && electron-builder --linux --x64 --publish=always",
+    "release:linux:arm64": "vite build && electron-builder --linux --arm64 --publish=always"
   },
   "build": {
     "appId": "com.preppy.v2",
@@ -36,6 +40,14 @@
         { "target": "portable", "arch": ["x64"] }
       ],
       "artifactName": "Preppy-portable.exe"
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] }
+      ],
+      "artifactName": "Preppy-${arch}.${ext}",
+      "category": "Utility",
+      "executableName": "preppy"
     },
     "publish": {
       "provider": "github",

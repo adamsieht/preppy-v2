@@ -7,7 +7,7 @@ A touch-first food service kiosk application built on Electron + React. Designed
 ## Features
 
 ### Print Labels
-Select a ZPL label template and a time preset — 4 HR through 30 DAY. A live preview renders immediately. Tap print, choose a quantity, and it goes straight to the printer. Presets are fully customizable: add, remove, and drag to reorder. Templates ship as IX (Internal Use), OX (Opened/Expiry), and UX (Use First).
+Select a ZPL label template and a time preset — 4 HR through 30 DAY. A live preview renders immediately. Tap print, choose a quantity, and it goes straight to the printer. Presets are fully customizable: add, remove, and drag to reorder. Templates ship as IX (In Use), OX (Opened/Prepped), and UX (Unopened).
 
 ### Custom Labels
 Enter any hour duration manually via a large numpad, pick a quantity and template, and print. Useful for edge cases or items that don't fit a standard preset.
@@ -162,7 +162,7 @@ Templates live in `resources/zpl/` and use `{{PLACEHOLDER}}` substitution:
 | `{{EXPIRY_TIME}}` | Expiry time (`hh:mm A`) |
 | `{{DURATION}}` | Duration label text |
 
-Three templates ship by default: **IX** (Internal Use), **OX** (Opened/Expiry), **UX** (Use First).
+Three templates ship by default: **IX** (In Use), **OX** (Opened/Prepped), **UX** (Unopened).
 
 ---
 

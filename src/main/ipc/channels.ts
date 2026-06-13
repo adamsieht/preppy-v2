@@ -30,6 +30,8 @@ export const IPC = {
   UPDATE_SAVE_SETTINGS: 'update:save-settings',
   APP_VERSION:          'app:version',
   APP_QUIT:             'app:quit',
+  APP_GET_KIOSK:        'app:get-kiosk',
+  APP_SET_KIOSK:        'app:set-kiosk',
 } as const
 
 export type IpcChannel = typeof IPC[keyof typeof IPC]

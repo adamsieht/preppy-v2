@@ -30,6 +30,12 @@
       "dist/**/*",
       "!dist/renderer/**/*.map"
     ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ],
     "asarUnpack": [
       "**/*.node"
     ],

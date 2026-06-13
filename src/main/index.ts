@@ -16,6 +16,7 @@ import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 import { getConfig } from './services/config.service'
+import { maybePromptFirstRunSetup } from './services/setup.service'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -69,8 +70,11 @@ app.whenReady().then(() => {
 
   logInfo('IPC handlers registered')
 
-  createWindow()
+  const win = createWindow()
   startSensorPolling()
+
+  // First-run setup offer (packaged Windows only — no-op elsewhere)
+  void maybePromptFirstRunSetup(win)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

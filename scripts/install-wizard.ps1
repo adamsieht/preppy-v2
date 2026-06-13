@@ -14,14 +14,22 @@
         %TEMP%\preppy-setup.log
 #>
 
+# -- Parameters ---------------------------------------------------------------
+# -LocalExe: install this already-downloaded portable .exe instead of fetching
+# the latest release from GitHub. Passed by Preppy's first-run setup so the copy
+# the user launched is the copy that gets installed.
+param(
+    [string] $LocalExe = ""
+)
+
 # -- Self-elevation -----------------------------------------------------------
 # If not already running as Administrator, relaunch with a UAC prompt.
 $_id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $_pr = New-Object Security.Principal.WindowsPrincipal($_id)
 if (-not $_pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Start-Process powershell -Verb RunAs -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`""
-    )
+    $_relaunchArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"")
+    if ($LocalExe) { $_relaunchArgs += @('-LocalExe', "`"$LocalExe`"") }
+    Start-Process powershell -Verb RunAs -ArgumentList $_relaunchArgs
     exit 0
 }
 
@@ -387,6 +395,7 @@ function Start-WizardInstall {
         LoginPass      = $tPass.Text
         Token          = $tToken.Text.Trim()
         InstallDir     = "$env:LOCALAPPDATA\Preppy"
+        LocalExe       = $LocalExe
     }
 
     $installBlock = {
@@ -401,56 +410,67 @@ function Start-WizardInstall {
         }
 
         try {
-            Log ""
-            Log "=== Downloading Preppy ==="
-            $hdrs = @{
-                'User-Agent'           = 'PrepyInstaller'
-                'Accept'               = 'application/vnd.github+json'
-                'X-GitHub-Api-Version' = '2022-11-28'
-            }
-            if ($o.Token) { $hdrs['Authorization'] = "Bearer $($o.Token)" }
-
-            # Try the latest stable release first; fall back to the most recent
-            # release of any kind (including pre-releases) if none exists yet.
-            $release = $null
-            try {
-                $release = Invoke-RestMethod `
-                    "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases/latest" `
-                    -Headers $hdrs
-            } catch {
-                Log "  No stable release found, checking for pre-releases..."
-                try {
-                    $all     = Invoke-RestMethod `
-                        "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases?per_page=10" `
-                        -Headers $hdrs
-                    $release = $all | Where-Object { -not $_.draft } | Select-Object -First 1
-                } catch {}
-            }
-            if (-not $release) {
-                throw "No releases found for $($o.RepoOwner)/$($o.RepoName). A GitHub release with a Windows .exe must be published before Preppy can be downloaded."
-            }
-
-            # Prefer the portable build by name; fall back to the largest exe
-            $asset = $release.assets | Where-Object { $_.name -eq "Preppy-portable.exe" } | Select-Object -First 1
-            if (-not $asset) {
-                $asset = $release.assets |
-                    Where-Object { $_.name -like "*.exe" } |
-                    Sort-Object size -Descending |
-                    Select-Object -First 1
-            }
-            if (-not $asset) {
-                throw "Release $($release.tag_name) has no .exe file attached. The CI build may still be running -- please try again in a few minutes."
-            }
-            Log "  Version : $($release.tag_name)"
-            Log "  File    : $($asset.name)  ($([math]::Round($asset.size/1MB,1)) MB)"
-
             New-Item -ItemType Directory -Force -Path $o.InstallDir | Out-Null
             $exePath = Join-Path $o.InstallDir "Preppy-portable.exe"
-            $dlHdrs  = $hdrs.Clone()
-            $dlHdrs['Accept'] = 'application/octet-stream'
-            Invoke-WebRequest -Uri $asset.browser_download_url `
-                -OutFile $exePath -UseBasicParsing -Headers $dlHdrs
-            Log "  Saved to: $exePath"
+
+            if ($o.LocalExe -and (Test-Path -LiteralPath $o.LocalExe)) {
+                # First-run setup launched from inside Preppy: install the copy the
+                # user already launched instead of re-downloading it.
+                Log ""
+                Log "=== Installing Preppy (using the running copy) ==="
+                Log "  Source  : $($o.LocalExe)"
+                Copy-Item -LiteralPath $o.LocalExe -Destination $exePath -Force
+                Log "  Saved to: $exePath"
+            } else {
+                Log ""
+                Log "=== Downloading Preppy ==="
+                $hdrs = @{
+                    'User-Agent'           = 'PrepyInstaller'
+                    'Accept'               = 'application/vnd.github+json'
+                    'X-GitHub-Api-Version' = '2022-11-28'
+                }
+                if ($o.Token) { $hdrs['Authorization'] = "Bearer $($o.Token)" }
+
+                # Try the latest stable release first; fall back to the most recent
+                # release of any kind (including pre-releases) if none exists yet.
+                $release = $null
+                try {
+                    $release = Invoke-RestMethod `
+                        "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases/latest" `
+                        -Headers $hdrs
+                } catch {
+                    Log "  No stable release found, checking for pre-releases..."
+                    try {
+                        $all     = Invoke-RestMethod `
+                            "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases?per_page=10" `
+                            -Headers $hdrs
+                        $release = $all | Where-Object { -not $_.draft } | Select-Object -First 1
+                    } catch {}
+                }
+                if (-not $release) {
+                    throw "No releases found for $($o.RepoOwner)/$($o.RepoName). A GitHub release with a Windows .exe must be published before Preppy can be downloaded."
+                }
+
+                # Prefer the portable build by name; fall back to the largest exe
+                $asset = $release.assets | Where-Object { $_.name -eq "Preppy-portable.exe" } | Select-Object -First 1
+                if (-not $asset) {
+                    $asset = $release.assets |
+                        Where-Object { $_.name -like "*.exe" } |
+                        Sort-Object size -Descending |
+                        Select-Object -First 1
+                }
+                if (-not $asset) {
+                    throw "Release $($release.tag_name) has no .exe file attached. The CI build may still be running -- please try again in a few minutes."
+                }
+                Log "  Version : $($release.tag_name)"
+                Log "  File    : $($asset.name)  ($([math]::Round($asset.size/1MB,1)) MB)"
+
+                $dlHdrs  = $hdrs.Clone()
+                $dlHdrs['Accept'] = 'application/octet-stream'
+                Invoke-WebRequest -Uri $asset.browser_download_url `
+                    -OutFile $exePath -UseBasicParsing -Headers $dlHdrs
+                Log "  Saved to: $exePath"
+            }
 
             Log ""
             Log "=== Configuring Windows Update ==="

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import type { LabelLayout, LabelValues } from '../../Preppy/labelTypes'
 import { BUILTIN_LAYOUTS, DEFAULT_LAYOUT_ID, getLabelSize } from '../../Preppy/labelDefs'
 import { generateZpl } from '../../Preppy/labelZpl'
-import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY } from '../../Preppy/constants'
+import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY, STATIC_PRESETS_ENABLED_KEY } from '../../Preppy/constants'
 import LabelPreview from '../../../components/LabelPreview'
 import LabelEditor from '../../../components/label-editor/LabelEditor'
 import SettingsCard from '../../../components/settings/SettingsCard'
@@ -44,6 +44,14 @@ export default function LabelsTab() {
 
   // Static presets (built-in + custom). Custom ones are created here and appear
   // in the Print Labels presets row.
+  const [staticsEnabled, setStaticsEnabled] = useState(() =>
+    localStorage.getItem(STATIC_PRESETS_ENABLED_KEY) !== 'false'
+  )
+  function toggleStatics() {
+    const next = !staticsEnabled
+    setStaticsEnabled(next)
+    localStorage.setItem(STATIC_PRESETS_ENABLED_KEY, next ? 'true' : 'false')
+  }
   const [customStatics, setCustomStatics] = useState<StaticPreset[]>(loadCustomStaticPresets)
   const [staticName, setStaticName]       = useState('')
   const [staticText, setStaticText]       = useState('')
@@ -298,6 +306,39 @@ export default function LabelsTab() {
             onClick={addStaticPreset}
             disabled={!staticName.trim() || !staticText.trim()}
           >+ Add</button>
+          <div style={{ alignSelf: 'flex-end', paddingBottom: 9, display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <div
+              role="switch"
+              aria-checked={staticsEnabled}
+              onClick={toggleStatics}
+              style={{
+                boxSizing: 'border-box',
+                display: 'flex',
+                alignItems: 'center',
+                width: 36,
+                height: 20,
+                padding: 2,
+                borderRadius: 10,
+                flexShrink: 0,
+                cursor: 'pointer',
+                transition: 'background-color 0.15s',
+                backgroundColor: staticsEnabled ? '#28a745' : '#484f58',
+              }}
+            >
+              <span style={{
+                display: 'block',
+                width: 16,
+                height: 16,
+                borderRadius: '50%',
+                backgroundColor: 'white',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                transition: 'transform 0.15s',
+                transform: staticsEnabled ? 'translateX(16px)' : 'translateX(0)',
+                flexShrink: 0,
+              }} />
+            </div>
+            <span className="text-xs text-[#6e7681] whitespace-nowrap">Show on presets bar</span>
+          </div>
         </div>
 
         {/* List */}
@@ -314,7 +355,7 @@ export default function LabelsTab() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-[#e6edf3] truncate">{sp.name}</span>
-                    {builtin && <span className="text-[10px] bg-[#30363d] text-[#adbac7] px-1.5 py-0.5 rounded font-semibold">Built-in</span>}
+                    {builtin && <span className="text-[10px] bg-[#30363d] px-1.5 py-0.5 rounded font-semibold" style={{ color: 'white' }}>Built-in</span>}
                   </div>
                   <div className="text-xs text-[#768390]">Tiled “{sp.text}” · 2"×1" Daymark</div>
                 </div>
@@ -375,8 +416,8 @@ function LayoutRow({
       {/* Name + meta */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-[#e6edf3] truncate">{layout.name}</span>
-          {isActive && <span className="text-[10px] bg-[#1f6feb] text-white px-1.5 py-0.5 rounded font-semibold">Active</span>}
+          <span className="text-sm font-semibold text-[#e6edf3] truncate" style={isActive ? { color: 'white' } : undefined}>{layout.name}</span>
+          {isActive && <span className="text-[10px] bg-[#1f6feb] px-1.5 py-0.5 rounded font-semibold" style={{ color: 'white' }}>Active</span>}
         </div>
         <div className="text-xs text-[#768390]">
           {size.label} · {layout.stockKey === 'daymark' ? 'Daymark' : 'Blank'} · {layout.elements.length} elements

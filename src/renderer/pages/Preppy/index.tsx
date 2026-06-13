@@ -24,7 +24,7 @@ import type { StaticPreset } from './staticPresets'
 import { generateZpl } from './labelZpl'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
 import type { LabelTemplate, CustomPreset, DisplayPreset, PrintQtyTarget, BundleEntry, TemplateHrs, ToastState } from './types'
-import { TEMPLATES, DEFAULT_PRESETS, DEFAULT_DURATIONS, PRESETS_KEY, PRESET_ORDER_KEY, HIDDEN_PRESETS_KEY, PANEL_COLLAPSED_KEY, LEFT_COLLAPSED_KEY, WIDTH_KEY } from './constants'
+import { TEMPLATES, DEFAULT_PRESETS, DEFAULT_DURATIONS, PRESETS_KEY, PRESET_ORDER_KEY, HIDDEN_PRESETS_KEY, PANEL_COLLAPSED_KEY, LEFT_COLLAPSED_KEY, WIDTH_KEY, STATIC_PRESETS_ENABLED_KEY } from './constants'
 import { loadDateCalcSettings, resolveExpiry, wouldExceedMidnight } from './labelDateCalc'
 import { loadStored, persist, autoLabel, fmtDuration } from './utils'
 import { classes } from './Preppy.styles'
@@ -118,7 +118,9 @@ export default function Preppy() {
   })
   const [isLargeScreen, setIsLargeScreen] = useState(() => window.innerWidth >= 1280)
   const [activeLayout]  = useState(loadActiveLayout)
-  const [staticPresets] = useState(loadStaticPresets)
+  const [staticPresets] = useState(() =>
+    localStorage.getItem(STATIC_PRESETS_ENABLED_KEY) === 'false' ? [] : loadStaticPresets()
+  )
   const divDragRef = useRef<{ startX: number; startW: number } | null>(null)
   const errorMsg   = useErrorMsg()
 

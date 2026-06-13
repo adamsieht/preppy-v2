@@ -37,7 +37,7 @@ const classes = {
     }`,
   navIcon:    'text-base leading-none w-5 text-center',
   groupLabel: 'px-5 pt-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-[#6e7681]',
-  content:    'flex-1 min-w-0 overflow-y-auto p-5',
+  content:    'flex-1 min-w-0 overflow-y-auto p-5 bg-[#0d1117]',
 }
 
 export default function Settings() {

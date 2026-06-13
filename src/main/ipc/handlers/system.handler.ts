@@ -1,9 +1,13 @@
-import { ipcMain } from 'electron'
+import { ipcMain, app } from 'electron'
 import { IPC } from '../channels'
 import { setSystemTime, openSystemTimeSettings, enableNtp } from '../../services/system.service'
 import { logInfo } from '../../logger'
 
 export function registerSystemHandlers(): void {
+  ipcMain.handle(IPC.APP_QUIT, () => {
+    logInfo('Quit requested via settings')
+    app.quit()
+  })
   ipcMain.handle(IPC.SYSTEM_SET_TIME, async (_event, iso: unknown) => {
     if (typeof iso !== 'string') return { success: false, error: 'Expected an ISO date string' }
     logInfo(`Setting system time to: ${iso}`)

@@ -5,6 +5,8 @@ import { setPrinterDevice, setLabelHome, getConfig } from '../../services/config
 import { logInfo } from '../../logger'
 
 export function registerPrinterSetupHandlers(): void {
+  ipcMain.handle(IPC.CONFIG_GET, () => getConfig())
+
   ipcMain.handle(IPC.PRINTER_SCAN, () => {
     logInfo('Scanning for printer devices')
     return scanPrinters()

@@ -111,12 +111,13 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
       flexShrink: 0,
       userSelect: 'none',
     }}>
-      {/* Content layer — translate simulates ^LH offset without moving the label boundary */}
-      <div style={{ position: 'absolute', inset: 0, transform: `translate(${ox}px, ${oy}px)` }}>
+      {/* DOW strip is pre-printed on the label stock — it never moves with the ^LH offset */}
       {layout.stockKey === 'daymark' && layout.dowConfig && (
         <DowStrip layout={layout} expiry={expiry} />
       )}
 
+      {/* Printer content — translate simulates the ^LH offset shifting all printed elements */}
+      <div style={{ position: 'absolute', inset: 0, transform: `translate(${ox}px, ${oy}px)` }}>
       {layout.elements.map(el => {
         const text = resolvePreviewText(el, values)
         if (!text) return null

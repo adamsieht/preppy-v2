@@ -36,6 +36,7 @@ export default function GeneralTab() {
   const [confirmClear,   setConfirmClear]   = useState(false)
   const [resetMsg,       setResetMsg]       = useState<string | null>(null)
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
+  const [confirmQuit,    setConfirmQuit]    = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
   const [sortField,    setSortField]    = useState<QuickSortField>(() => {
     const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as QuickSortField | null
@@ -375,6 +376,24 @@ export default function GeneralTab() {
           The exported file does not include your GitHub token or usage history. Import restores all other settings and reloads the app.
         </div>
       </SettingsCard>
+
+      {/* ── Exit (tucked away at the bottom) ── */}
+      <div className="pt-4 border-t border-[#21262d]">
+        {confirmQuit ? (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-[#f85149] font-semibold">Exit Preppy?</span>
+            <button onClick={() => void window.electronAPI.quitApp()} className={ui.dangerSolid}>Yes, exit</button>
+            <button onClick={() => setConfirmQuit(false)} className={ui.secondaryBtn}>Cancel</button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmQuit(true)}
+            className="text-[#484f58] text-xs hover:text-[#6e7681] bg-transparent border-0 cursor-pointer transition-colors"
+          >
+            Exit Preppy
+          </button>
+        )}
+      </div>
 
     </div>
   )

@@ -38,6 +38,7 @@ export interface ElectronAPI {
   getUpdateSettings: () => Promise<UpdateSettings>
   saveUpdateSettings: (s: UpdateSettings) => Promise<{ success: boolean }>
   getAppVersion: () => Promise<string>
+  quitApp: () => Promise<void>
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -102,4 +103,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getUpdateSettings: () => ipcRenderer.invoke(IPC.UPDATE_GET_SETTINGS),
   saveUpdateSettings: (s: UpdateSettings) => ipcRenderer.invoke(IPC.UPDATE_SAVE_SETTINGS, s),
   getAppVersion: () => ipcRenderer.invoke(IPC.APP_VERSION),
+  quitApp:       () => ipcRenderer.invoke(IPC.APP_QUIT),
 } satisfies ElectronAPI)

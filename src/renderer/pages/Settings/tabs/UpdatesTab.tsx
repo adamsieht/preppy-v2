@@ -125,7 +125,7 @@ export default function UpdatesTab() {
 
             {checkResult.releaseNotes && (
               <div
-                className="max-h-48 overflow-y-auto bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#adbac7] whitespace-pre-wrap font-mono"
+                className="max-h-48 overflow-y-auto scrollbar-dark bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#adbac7] whitespace-pre-wrap font-mono"
               >
                 {checkResult.releaseNotes}
               </div>

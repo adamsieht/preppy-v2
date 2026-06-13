@@ -8,6 +8,7 @@ interface Props {
   children: React.ReactNode
   footer?: React.ReactNode      // sticky bottom bar
   noPad?: boolean               // opt out of content padding
+  noScroll?: boolean            // use overflow-hidden instead of overflow-y-auto
   customHeader?: React.ReactNode // replaces the default header interior
 }
 
@@ -18,12 +19,12 @@ const classes = {
   backBtn:  'bg-transparent border border-[#444c56] rounded-lg px-3 py-1.5 text-[1rem] min-h-[40px] text-[#adbac7]',
   title:    'text-[1.15rem] font-bold grow text-[#e6edf3]',
   cogBtn:   'bg-transparent border-0 text-[#768390] text-[1.25rem] leading-none cursor-pointer px-1 rounded shrink-0 hover:text-[#adbac7] transition-colors',
-  content:  (noPad?: boolean) => `flex-1 min-h-0 overflow-x-hidden overflow-y-auto${noPad ? '' : ' p-4'}`,
+  content:  (noPad?: boolean, noScroll?: boolean) => `flex-1 min-h-0 scrollbar-dark${noScroll ? ' overflow-hidden' : ' overflow-x-hidden overflow-y-auto'}${noPad ? '' : ' p-4'}`,
   footer:   'border-t border-[#30363d] bg-[#161b22] shrink-0',
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-export default function PageLayout({ title, back, right, children, footer, noPad, customHeader }: Props) {
+export default function PageLayout({ title, back, right, children, footer, noPad, noScroll, customHeader }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
   const backPath = back === true ? '/' : (back ?? null)
@@ -52,7 +53,7 @@ export default function PageLayout({ title, back, right, children, footer, noPad
       </div>
 
       {/* Scrollable content */}
-      <div className={classes.content(noPad)}>
+      <div className={classes.content(noPad, noScroll)}>
         {children}
       </div>
 

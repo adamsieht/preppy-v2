@@ -465,7 +465,7 @@ export default function Preppy() {
   }
 
   return (
-    <PageLayout customHeader={<PrepyHeader />} noPad>
+    <PageLayout customHeader={<PrepyHeader />} noPad noScroll>
       <div className={classes.page}>
 
         {/* ── Full-width top: IX / OX / UX template selector + edit controls ── */}

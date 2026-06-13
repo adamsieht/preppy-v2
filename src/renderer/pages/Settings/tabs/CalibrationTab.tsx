@@ -16,7 +16,7 @@ const c = {
   tmplBtn:   (active: boolean) => active
     ? 'px-4 py-[6px] rounded-lg bg-[#28a745] border-0 text-white text-sm font-bold cursor-pointer'
     : 'px-4 py-[6px] rounded-lg bg-transparent border border-[#30363d] text-[#adbac7] text-sm font-bold cursor-pointer hover:border-[#6e7681] hover:text-white transition-colors',
-  zplBox:    'bg-[#0d1117] rounded-lg p-3 font-mono text-[0.73rem] leading-[1.7] overflow-x-auto overflow-y-auto max-h-52',
+  zplBox:    'bg-[#0d1117] rounded-lg p-3 font-mono text-[0.73rem] leading-[1.7] overflow-x-auto overflow-y-auto scrollbar-dark max-h-52',
   zplCmd:    'text-[#58a6ff] font-bold',
   zplLhCmd:  'text-[#3fb950] font-bold',
   zplLhLine: 'bg-[#28a745]/10 rounded px-1 -mx-1 block',

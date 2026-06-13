@@ -30,14 +30,14 @@ const LINKS: { title: string; icon: string; path: string }[] = [
 
 const classes = {
   layout:    'flex h-full min-h-0',
-  sidebar:   'w-56 shrink-0 border-r border-[#30363d] bg-[#0d1117] overflow-y-auto flex flex-col py-3',
+  sidebar:   'w-56 shrink-0 border-r border-[#30363d] bg-[#0d1117] overflow-y-auto scrollbar-dark flex flex-col py-3',
   navItem: (active: boolean) =>
     `flex items-center gap-3 mx-2 px-3 py-[10px] rounded-lg text-sm font-semibold cursor-pointer text-left transition-colors ${
       active ? 'bg-[#161b22] text-white border border-[#30363d]' : 'text-[#adbac7] border border-transparent hover:bg-[#161b22] hover:text-white'
     }`,
   navIcon:    'text-base leading-none w-5 text-center',
   groupLabel: 'px-5 pt-4 pb-1 text-[10px] font-bold uppercase tracking-widest text-[#6e7681]',
-  content:    'flex-1 min-w-0 overflow-y-auto p-5 bg-[#0d1117]',
+  content:    'flex-1 min-w-0 overflow-y-auto scrollbar-dark p-5 bg-[#0d1117]',
 }
 
 export default function Settings() {

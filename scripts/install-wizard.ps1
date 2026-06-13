@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Preppy Windows Setup Wizard — GUI installer for first-time tablet setup.
+    Preppy Windows Setup Wizard -- GUI installer for first-time tablet setup.
 
 .DESCRIPTION
     A step-by-step graphical installer. Collects setup options, downloads the
@@ -14,53 +14,51 @@
         %TEMP%\preppy-setup.log
 #>
 
-# ── Self-elevation ────────────────────────────────────────────────────────────
-# Relaunch as Administrator if needed (triggers UAC prompt, then continues).
-$_principal = New-Object Security.Principal.WindowsPrincipal(
-    [Security.Principal.WindowsIdentity]::GetCurrent()
-)
-if (-not $_principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+# -- Self-elevation -----------------------------------------------------------
+# If not already running as Administrator, relaunch with a UAC prompt.
+$_id = [Security.Principal.WindowsIdentity]::GetCurrent()
+$_pr = New-Object Security.Principal.WindowsPrincipal($_id)
+if (-not $_pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell -Verb RunAs -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`""
     )
     exit 0
 }
 
+# -- Log file (persists after window closes) ----------------------------------
 $LOG_FILE = Join-Path $env:TEMP "preppy-setup.log"
 "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  Preppy Setup Wizard started" |
     Out-File $LOG_FILE -Encoding utf8 -Force
 
-try {
-
+# -- Load assemblies ----------------------------------------------------------
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# -- Constants ----------------------------------------------------------------
 $REPO_OWNER = "adamsieht"
 $REPO_NAME  = "preppy-v2"
 
-$C_ACCENT   = [System.Drawing.Color]::FromArgb(255,  40, 167,  69)   # green
-$C_ACCENT_H = [System.Drawing.Color]::FromArgb(255,  33, 136,  56)   # hover
-$C_DANGER   = [System.Drawing.Color]::FromArgb(255, 248,  81,  73)
-$C_SUCCESS  = [System.Drawing.Color]::FromArgb(255,  40, 167,  69)
-$C_WHITE    = [System.Drawing.Color]::White
-$C_FG       = [System.Drawing.Color]::FromArgb(255,  36,  41,  47)
-$C_MUTED    = [System.Drawing.Color]::FromArgb(255, 110, 118, 129)
-$C_BORDER   = [System.Drawing.Color]::FromArgb(255, 208, 215, 222)
-$C_FOOT_BG  = [System.Drawing.Color]::FromArgb(255, 246, 248, 250)
-$C_LOG_BG   = [System.Drawing.Color]::FromArgb(255,  13,  17,  23)
-$C_LOG_FG   = [System.Drawing.Color]::FromArgb(255, 201, 209, 217)
+$C_ACCENT  = [System.Drawing.Color]::FromArgb(255,  40, 167,  69)
+$C_DANGER  = [System.Drawing.Color]::FromArgb(255, 248,  81,  73)
+$C_SUCCESS = [System.Drawing.Color]::FromArgb(255,  40, 167,  69)
+$C_WHITE   = [System.Drawing.Color]::White
+$C_FG      = [System.Drawing.Color]::FromArgb(255,  36,  41,  47)
+$C_MUTED   = [System.Drawing.Color]::FromArgb(255, 110, 118, 129)
+$C_BORDER  = [System.Drawing.Color]::FromArgb(255, 208, 215, 222)
+$C_FOOT_BG = [System.Drawing.Color]::FromArgb(255, 246, 248, 250)
+$C_LOG_BG  = [System.Drawing.Color]::FromArgb(255,  13,  17,  23)
+$C_LOG_FG  = [System.Drawing.Color]::FromArgb(255, 201, 209, 217)
 
-$F_UI     = New-Object System.Drawing.Font("Segoe UI",  9)
-$F_BOLD   = New-Object System.Drawing.Font("Segoe UI",  9, [System.Drawing.FontStyle]::Bold)
-$F_TITLE  = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
-$F_HEAD   = New-Object System.Drawing.Font("Segoe UI", 10)
-$F_SMALL  = New-Object System.Drawing.Font("Segoe UI",  8)
-$F_MONO   = New-Object System.Drawing.Font("Consolas",  8.5)
+$F_UI    = New-Object System.Drawing.Font("Segoe UI",  9)
+$F_BOLD  = New-Object System.Drawing.Font("Segoe UI",  9, [System.Drawing.FontStyle]::Bold)
+$F_TITLE = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+$F_HEAD  = New-Object System.Drawing.Font("Segoe UI", 10)
+$F_SMALL = New-Object System.Drawing.Font("Segoe UI",  8)
+$F_MONO  = New-Object System.Drawing.Font("Consolas",  8.5)
 
-# ── Form ──────────────────────────────────────────────────────────────────────
+# -- Form ---------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
 $form.Text            = "Preppy Setup"
 $form.ClientSize      = New-Object System.Drawing.Size(520, 455)
@@ -70,7 +68,7 @@ $form.StartPosition   = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.BackColor       = $C_WHITE
 $form.Font            = $F_UI
 
-# ── Header (always visible) ───────────────────────────────────────────────────
+# -- Header (always visible) --------------------------------------------------
 $pHeader           = New-Object System.Windows.Forms.Panel
 $pHeader.Location  = New-Object System.Drawing.Point(0, 0)
 $pHeader.Size      = New-Object System.Drawing.Size(520, 72)
@@ -93,7 +91,7 @@ $lSubtitle.AutoSize  = $true
 $pHeader.Controls.AddRange(@($lTitle, $lSubtitle))
 $form.Controls.Add($pHeader)
 
-# ── Separator lines ───────────────────────────────────────────────────────────
+# -- Separator lines ----------------------------------------------------------
 foreach ($y in @(72, 411)) {
     $sep           = New-Object System.Windows.Forms.Label
     $sep.Location  = New-Object System.Drawing.Point(0, $y)
@@ -102,32 +100,32 @@ foreach ($y in @(72, 411)) {
     $form.Controls.Add($sep)
 }
 
-# ── Footer ────────────────────────────────────────────────────────────────────
+# -- Footer -------------------------------------------------------------------
 $pFoot           = New-Object System.Windows.Forms.Panel
 $pFoot.Location  = New-Object System.Drawing.Point(0, 412)
 $pFoot.Size      = New-Object System.Drawing.Size(520, 43)
 $pFoot.BackColor = $C_FOOT_BG
 
-$btnBack          = New-Object System.Windows.Forms.Button
-$btnBack.Text     = "< Back"
-$btnBack.Location = New-Object System.Drawing.Point(316, 6)
-$btnBack.Size     = New-Object System.Drawing.Size(90, 32)
+$btnBack           = New-Object System.Windows.Forms.Button
+$btnBack.Text      = "< Back"
+$btnBack.Location  = New-Object System.Drawing.Point(316, 6)
+$btnBack.Size      = New-Object System.Drawing.Size(90, 32)
 $btnBack.FlatStyle = [System.Windows.Forms.FlatStyle]::System
-$btnBack.Visible  = $false
+$btnBack.Visible   = $false
 
-$btnNext            = New-Object System.Windows.Forms.Button
-$btnNext.Text       = "Next >"
-$btnNext.Location   = New-Object System.Drawing.Point(414, 6)
-$btnNext.Size       = New-Object System.Drawing.Size(90, 32)
-$btnNext.BackColor  = $C_ACCENT
-$btnNext.ForeColor  = $C_WHITE
-$btnNext.FlatStyle  = [System.Windows.Forms.FlatStyle]::Flat
-$btnNext.FlatAppearance.BorderSize = 0
+$btnNext                              = New-Object System.Windows.Forms.Button
+$btnNext.Text                         = "Next >"
+$btnNext.Location                     = New-Object System.Drawing.Point(414, 6)
+$btnNext.Size                         = New-Object System.Drawing.Size(90, 32)
+$btnNext.BackColor                    = $C_ACCENT
+$btnNext.ForeColor                    = $C_WHITE
+$btnNext.FlatStyle                    = [System.Windows.Forms.FlatStyle]::Flat
+$btnNext.FlatAppearance.BorderSize    = 0
 
 $pFoot.Controls.AddRange(@($btnBack, $btnNext))
 $form.Controls.Add($pFoot)
 
-# ── Content panel factory ─────────────────────────────────────────────────────
+# -- Content panel factory ----------------------------------------------------
 $PANEL_Y = 73
 $PANEL_H = 338
 $PANEL_W = 520
@@ -142,14 +140,14 @@ function New-Page {
     return $p
 }
 
-# ── Page 1 — Welcome ──────────────────────────────────────────────────────────
+# -- Page 1: Welcome ----------------------------------------------------------
 $pg1 = New-Page
 
-$lIntro           = New-Object System.Windows.Forms.Label
-$lIntro.Text      = "This wizard will configure your tablet and install the latest version of Preppy. It takes about 2 minutes and requires an internet connection."
+$lIntro          = New-Object System.Windows.Forms.Label
+$lIntro.Text     = "This wizard will configure your tablet and install the latest version of Preppy. It takes about 2 minutes and requires an internet connection."
 $lIntro.ForeColor = $C_FG
-$lIntro.Location  = New-Object System.Drawing.Point(16, 14)
-$lIntro.Size      = New-Object System.Drawing.Size(486, 44)
+$lIntro.Location = New-Object System.Drawing.Point(16, 14)
+$lIntro.Size     = New-Object System.Drawing.Size(486, 44)
 $pg1.Controls.Add($lIntro)
 
 $lWhat           = New-Object System.Windows.Forms.Label
@@ -160,7 +158,7 @@ $lWhat.Location  = New-Object System.Drawing.Point(16, 68)
 $lWhat.AutoSize  = $true
 $pg1.Controls.Add($lWhat)
 
-$wizardSteps = @(
+$wizSteps = @(
     "Download and install the latest version of Preppy"
     "Prevent Windows from auto-restarting during updates"
     "Disable sleep, hibernate, and screen timeout"
@@ -169,9 +167,9 @@ $wizardSteps = @(
     "Install the Generic Text Only printer driver"
 )
 $iy = 92
-foreach ($s in $wizardSteps) {
+foreach ($s in $wizSteps) {
     $l           = New-Object System.Windows.Forms.Label
-    $l.Text      = "   $([char]0x2022)   $s"
+    $l.Text      = "   *   $s"
     $l.ForeColor = $C_FG
     $l.Location  = New-Object System.Drawing.Point(16, $iy)
     $l.Size      = New-Object System.Drawing.Size(486, 22)
@@ -187,10 +185,9 @@ $lNote.Location  = New-Object System.Drawing.Point(16, 310)
 $lNote.Size      = New-Object System.Drawing.Size(486, 18)
 $pg1.Controls.Add($lNote)
 
-# ── Page 2 — Options ──────────────────────────────────────────────────────────
+# -- Page 2: Options ----------------------------------------------------------
 $pg2 = New-Page
 
-# Windows Update
 $grpUpd           = New-Object System.Windows.Forms.GroupBox
 $grpUpd.Text      = " Windows Update "
 $grpUpd.Font      = $F_BOLD
@@ -198,23 +195,22 @@ $grpUpd.ForeColor = $C_FG
 $grpUpd.Location  = New-Object System.Drawing.Point(12, 8)
 $grpUpd.Size      = New-Object System.Drawing.Size(494, 74)
 
-$radAllow           = New-Object System.Windows.Forms.RadioButton
-$radAllow.Text      = "Allow updates, but never auto-restart  (recommended)"
-$radAllow.Font      = $F_UI
-$radAllow.Location  = New-Object System.Drawing.Point(10, 22)
-$radAllow.Size      = New-Object System.Drawing.Size(470, 22)
-$radAllow.Checked   = $true
+$radAllow          = New-Object System.Windows.Forms.RadioButton
+$radAllow.Text     = "Allow updates, but never auto-restart  (recommended)"
+$radAllow.Font     = $F_UI
+$radAllow.Location = New-Object System.Drawing.Point(10, 22)
+$radAllow.Size     = New-Object System.Drawing.Size(470, 22)
+$radAllow.Checked  = $true
 
-$radDisable         = New-Object System.Windows.Forms.RadioButton
-$radDisable.Text    = "Disable automatic updates entirely"
-$radDisable.Font    = $F_UI
+$radDisable          = New-Object System.Windows.Forms.RadioButton
+$radDisable.Text     = "Disable automatic updates entirely"
+$radDisable.Font     = $F_UI
 $radDisable.Location = New-Object System.Drawing.Point(10, 48)
-$radDisable.Size    = New-Object System.Drawing.Size(470, 22)
+$radDisable.Size     = New-Object System.Drawing.Size(470, 22)
 
 $grpUpd.Controls.AddRange(@($radAllow, $radDisable))
 $pg2.Controls.Add($grpUpd)
 
-# Auto-login
 $grpLogin           = New-Object System.Windows.Forms.GroupBox
 $grpLogin.Text      = " Automatic Login (optional) "
 $grpLogin.Font      = $F_BOLD
@@ -222,46 +218,46 @@ $grpLogin.ForeColor = $C_FG
 $grpLogin.Location  = New-Object System.Drawing.Point(12, 90)
 $grpLogin.Size      = New-Object System.Drawing.Size(494, 106)
 
-$chkLogin           = New-Object System.Windows.Forms.CheckBox
-$chkLogin.Text      = "Log in automatically on startup (no password prompt)"
-$chkLogin.Font      = $F_UI
-$chkLogin.Location  = New-Object System.Drawing.Point(10, 22)
-$chkLogin.Size      = New-Object System.Drawing.Size(470, 22)
+$chkLogin          = New-Object System.Windows.Forms.CheckBox
+$chkLogin.Text     = "Log in automatically on startup (no password prompt)"
+$chkLogin.Font     = $F_UI
+$chkLogin.Location = New-Object System.Drawing.Point(10, 22)
+$chkLogin.Size     = New-Object System.Drawing.Size(470, 22)
 
-$lUser              = New-Object System.Windows.Forms.Label
-$lUser.Text         = "Username:"
-$lUser.Font         = $F_UI
-$lUser.Location     = New-Object System.Drawing.Point(10, 52)
-$lUser.Size         = New-Object System.Drawing.Size(72, 22)
-$lUser.Enabled      = $false
+$lUser           = New-Object System.Windows.Forms.Label
+$lUser.Text      = "Username:"
+$lUser.Font      = $F_UI
+$lUser.Location  = New-Object System.Drawing.Point(10, 52)
+$lUser.Size      = New-Object System.Drawing.Size(72, 22)
+$lUser.Enabled   = $false
 
-$tUser              = New-Object System.Windows.Forms.TextBox
-$tUser.Font         = $F_UI
-$tUser.Location     = New-Object System.Drawing.Point(86, 50)
-$tUser.Size         = New-Object System.Drawing.Size(178, 26)
-$tUser.Enabled      = $false
+$tUser          = New-Object System.Windows.Forms.TextBox
+$tUser.Font     = $F_UI
+$tUser.Location = New-Object System.Drawing.Point(86, 50)
+$tUser.Size     = New-Object System.Drawing.Size(178, 26)
+$tUser.Enabled  = $false
 
-$lPass              = New-Object System.Windows.Forms.Label
-$lPass.Text         = "Password:"
-$lPass.Font         = $F_UI
-$lPass.Location     = New-Object System.Drawing.Point(274, 52)
-$lPass.Size         = New-Object System.Drawing.Size(68, 22)
-$lPass.Enabled      = $false
+$lPass           = New-Object System.Windows.Forms.Label
+$lPass.Text      = "Password:"
+$lPass.Font      = $F_UI
+$lPass.Location  = New-Object System.Drawing.Point(274, 52)
+$lPass.Size      = New-Object System.Drawing.Size(68, 22)
+$lPass.Enabled   = $false
 
-$tPass              = New-Object System.Windows.Forms.TextBox
-$tPass.PasswordChar = [char]0x2022
-$tPass.Font         = $F_UI
-$tPass.Location     = New-Object System.Drawing.Point(346, 50)
-$tPass.Size         = New-Object System.Drawing.Size(140, 26)
-$tPass.Enabled      = $false
+$tPass                = New-Object System.Windows.Forms.TextBox
+$tPass.PasswordChar   = [char]0x2022
+$tPass.Font           = $F_UI
+$tPass.Location       = New-Object System.Drawing.Point(346, 50)
+$tPass.Size           = New-Object System.Drawing.Size(140, 26)
+$tPass.Enabled        = $false
 
-$lPassHint          = New-Object System.Windows.Forms.Label
-$lPassHint.Text     = "Leave password blank if the account has no password set."
-$lPassHint.Font     = $F_SMALL
+$lPassHint           = New-Object System.Windows.Forms.Label
+$lPassHint.Text      = "Leave password blank if the account has no password set."
+$lPassHint.Font      = $F_SMALL
 $lPassHint.ForeColor = $C_MUTED
-$lPassHint.Location = New-Object System.Drawing.Point(10, 80)
-$lPassHint.Size     = New-Object System.Drawing.Size(470, 18)
-$lPassHint.Enabled  = $false
+$lPassHint.Location  = New-Object System.Drawing.Point(10, 80)
+$lPassHint.Size      = New-Object System.Drawing.Size(470, 18)
+$lPassHint.Enabled   = $false
 
 $chkLogin.Add_CheckedChanged({
     $on = $chkLogin.Checked
@@ -271,7 +267,6 @@ $chkLogin.Add_CheckedChanged({
 $grpLogin.Controls.AddRange(@($chkLogin, $lUser, $tUser, $lPass, $tPass, $lPassHint))
 $pg2.Controls.Add($grpLogin)
 
-# GitHub token
 $grpToken           = New-Object System.Windows.Forms.GroupBox
 $grpToken.Text      = " Private Repository (optional) "
 $grpToken.Font      = $F_BOLD
@@ -279,52 +274,52 @@ $grpToken.ForeColor = $C_FG
 $grpToken.Location  = New-Object System.Drawing.Point(12, 204)
 $grpToken.Size      = New-Object System.Drawing.Size(494, 62)
 
-$lToken             = New-Object System.Windows.Forms.Label
-$lToken.Text        = "GitHub token:"
-$lToken.Font        = $F_UI
-$lToken.Location    = New-Object System.Drawing.Point(10, 26)
-$lToken.Size        = New-Object System.Drawing.Size(92, 22)
+$lToken          = New-Object System.Windows.Forms.Label
+$lToken.Text     = "GitHub token:"
+$lToken.Font     = $F_UI
+$lToken.Location = New-Object System.Drawing.Point(10, 26)
+$lToken.Size     = New-Object System.Drawing.Size(92, 22)
 
-$tToken                  = New-Object System.Windows.Forms.TextBox
-$tToken.Font             = $F_UI
-$tToken.PlaceholderText  = "ghp_...    (leave blank for a public repository)"
-$tToken.Location         = New-Object System.Drawing.Point(106, 24)
-$tToken.Size             = New-Object System.Drawing.Size(380, 26)
+$tToken                 = New-Object System.Windows.Forms.TextBox
+$tToken.Font            = $F_UI
+$tToken.PlaceholderText = "ghp_...    (leave blank for a public repository)"
+$tToken.Location        = New-Object System.Drawing.Point(106, 24)
+$tToken.Size            = New-Object System.Drawing.Size(380, 26)
 
 $grpToken.Controls.AddRange(@($lToken, $tToken))
 $pg2.Controls.Add($grpToken)
 
-# ── Page 3 — Installing ───────────────────────────────────────────────────────
+# -- Page 3: Installing -------------------------------------------------------
 $pg3 = New-Page
 
 $lStatus           = New-Object System.Windows.Forms.Label
-$lStatus.Text      = "Starting installation…"
+$lStatus.Text      = "Starting installation..."
 $lStatus.Font      = $F_BOLD
 $lStatus.ForeColor = $C_FG
 $lStatus.Location  = New-Object System.Drawing.Point(16, 12)
 $lStatus.Size      = New-Object System.Drawing.Size(486, 22)
 $pg3.Controls.Add($lStatus)
 
-$progBar           = New-Object System.Windows.Forms.ProgressBar
-$progBar.Style     = [System.Windows.Forms.ProgressBarStyle]::Marquee
-$progBar.Location  = New-Object System.Drawing.Point(16, 40)
-$progBar.Size      = New-Object System.Drawing.Size(486, 22)
+$progBar          = New-Object System.Windows.Forms.ProgressBar
+$progBar.Style    = [System.Windows.Forms.ProgressBarStyle]::Marquee
+$progBar.Location = New-Object System.Drawing.Point(16, 40)
+$progBar.Size     = New-Object System.Drawing.Size(486, 22)
 $pg3.Controls.Add($progBar)
 
-$logBox            = New-Object System.Windows.Forms.RichTextBox
-$logBox.Font       = $F_MONO
-$logBox.BackColor  = $C_LOG_BG
-$logBox.ForeColor  = $C_LOG_FG
-$logBox.ReadOnly   = $true
-$logBox.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
+$logBox             = New-Object System.Windows.Forms.RichTextBox
+$logBox.Font        = $F_MONO
+$logBox.BackColor   = $C_LOG_BG
+$logBox.ForeColor   = $C_LOG_FG
+$logBox.ReadOnly    = $true
+$logBox.ScrollBars  = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
 $logBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$logBox.Location   = New-Object System.Drawing.Point(16, 70)
-$logBox.Size       = New-Object System.Drawing.Size(486, 252)
+$logBox.Location    = New-Object System.Drawing.Point(16, 70)
+$logBox.Size        = New-Object System.Drawing.Size(486, 252)
 $pg3.Controls.Add($logBox)
 
-# ── Navigation ────────────────────────────────────────────────────────────────
+# -- Navigation ---------------------------------------------------------------
 $script:step       = -1
-$script:doneAction = 'none'   # 'restart' | 'close'
+$script:doneAction = 'none'
 $pages = @($pg1, $pg2, $pg3)
 
 function Show-Step([int]$n) {
@@ -339,13 +334,13 @@ function Show-Step([int]$n) {
             $btnNext.Enabled = $true
         }
         1 {
-            $lSubtitle.Text  = "Step 1 of 2 — Setup Options"
+            $lSubtitle.Text  = "Step 1 of 2 - Setup Options"
             $btnBack.Visible = $true
             $btnNext.Text    = "Install >"
             $btnNext.Enabled = $true
         }
         2 {
-            $lSubtitle.Text  = "Step 2 of 2 — Installing"
+            $lSubtitle.Text  = "Step 2 of 2 - Installing"
             $btnBack.Visible = $false
             $btnNext.Text    = "Restart Now"
             $btnNext.Enabled = $false
@@ -370,7 +365,7 @@ $btnNext.Add_Click({
     }
 })
 
-# ── Install ───────────────────────────────────────────────────────────────────
+# -- Install ------------------------------------------------------------------
 function Start-WizardInstall {
     if ($chkLogin.Checked -and -not $tUser.Text.Trim()) {
         [System.Windows.Forms.MessageBox]::Show(
@@ -407,7 +402,6 @@ function Start-WizardInstall {
         }
 
         try {
-            # 1. Download latest release
             Log ""
             Log "=== Downloading Preppy ==="
             $hdrs = @{
@@ -420,20 +414,23 @@ function Start-WizardInstall {
             $release = Invoke-RestMethod `
                 "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases/latest" `
                 -Headers $hdrs
-            $asset = $release.assets | Where-Object { $_.name -like "*.exe" } | Select-Object -First 1
-            if (-not $asset) { throw "No .exe asset found in release $($release.tag_name). Has a Windows build been published?" }
-
+            $asset = $release.assets |
+                Where-Object { $_.name -like "*.exe" } |
+                Select-Object -First 1
+            if (-not $asset) {
+                throw "No .exe asset found in release $($release.tag_name)."
+            }
             Log "  Version : $($release.tag_name)"
             Log "  File    : $($asset.name)  ($([math]::Round($asset.size/1MB,1)) MB)"
 
             New-Item -ItemType Directory -Force -Path $o.InstallDir | Out-Null
             $exePath = Join-Path $o.InstallDir "Preppy-portable.exe"
-            $dlHdrs  = $hdrs.Clone(); $dlHdrs['Accept'] = 'application/octet-stream'
-            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $exePath `
-                -UseBasicParsing -Headers $dlHdrs
+            $dlHdrs  = $hdrs.Clone()
+            $dlHdrs['Accept'] = 'application/octet-stream'
+            Invoke-WebRequest -Uri $asset.browser_download_url `
+                -OutFile $exePath -UseBasicParsing -Headers $dlHdrs
             Log "  Saved to: $exePath"
 
-            # 2. Windows Update policy
             Log ""
             Log "=== Configuring Windows Update ==="
             $au = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
@@ -448,43 +445,53 @@ function Start-WizardInstall {
                 Reg $au 'ScheduledInstallTime'          3
                 Log "  Updates at 3 AM  |  Auto-restart: DISABLED"
             }
-            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' 'DODownloadMode' 0
-            Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' 'MaintenanceDisabled' 1
+            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' `
+                'DODownloadMode' 0
+            Reg 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\Maintenance' `
+                'MaintenanceDisabled' 1
             Log "  Delivery Optimization: DISABLED"
             Log "  Automatic Maintenance: DISABLED"
 
-            # 3. Power / sleep / hibernate
             Log ""
             Log "=== Configuring power settings ==="
-            @('monitor-timeout-ac','monitor-timeout-dc','standby-timeout-ac','standby-timeout-dc',
-              'disk-timeout-ac','disk-timeout-dc','hibernate-timeout-ac','hibernate-timeout-dc') |
+            @('monitor-timeout-ac','monitor-timeout-dc',
+              'standby-timeout-ac','standby-timeout-dc',
+              'disk-timeout-ac','disk-timeout-dc',
+              'hibernate-timeout-ac','hibernate-timeout-dc') |
                 ForEach-Object { powercfg /change $_ 0 2>$null }
             powercfg /hibernate off
-            Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' 'HiberbootEnabled' 0
-            Log "  Screen timeout: NEVER  |  Sleep: NEVER  |  Hibernate: DISABLED"
-            Log "  Fast startup: DISABLED"
+            Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' `
+                'HiberbootEnabled' 0
+            Log "  Screen/sleep/hibernate: NEVER  |  Fast startup: DISABLED"
 
-            # 4. Lock screen / screensaver
             Log ""
             Log "=== Disabling lock screen and screensaver ==="
-            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization' 'NoLockScreen' 1
-            Reg 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop' 'ScreenSaveActive' '0' 'String'
-            Set-ItemProperty 'HKCU:\Control Panel\Desktop' -Name 'ScreenSaveTimeOut' -Value '0'
-            Set-ItemProperty 'HKCU:\Control Panel\Desktop' -Name 'ScreenSaveActive'  -Value '0'
-            Set-ItemProperty 'HKCU:\Control Panel\Desktop' -Name 'SCRNSAVE.EXE'      -Value ''
+            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization' `
+                'NoLockScreen' 1
+            Reg 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop' `
+                'ScreenSaveActive' '0' 'String'
+            Set-ItemProperty 'HKCU:\Control Panel\Desktop' `
+                -Name 'ScreenSaveTimeOut' -Value '0'
+            Set-ItemProperty 'HKCU:\Control Panel\Desktop' `
+                -Name 'ScreenSaveActive'  -Value '0'
+            Set-ItemProperty 'HKCU:\Control Panel\Desktop' `
+                -Name 'SCRNSAVE.EXE'      -Value ''
             Log "  Lock screen: DISABLED  |  Screensaver: DISABLED"
 
-            # 5. Kiosk tweaks
             Log ""
             Log "=== Applying kiosk tweaks ==="
-            Reg 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting'  'Disabled'                  1
-            Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl'       'AutoReboot'                1
-            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer'        'DisableNotificationCenter' 1
-            Reg 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer'        'DisableNotificationCenter' 1
-            Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' 'TaskbarAl'         0
+            Reg 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' `
+                'Disabled' 1
+            Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl' `
+                'AutoReboot' 1
+            Reg 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+                'DisableNotificationCenter' 1
+            Reg 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer' `
+                'DisableNotificationCenter' 1
+            Reg 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+                'TaskbarAl' 0
             Log "  Error reporting: DISABLED  |  Notification toasts: DISABLED"
 
-            # 6. Auto-login
             if ($o.AutoLogin -and $o.LoginUser) {
                 Log ""
                 Log "=== Configuring automatic login ==="
@@ -496,11 +503,11 @@ function Start-WizardInstall {
                 Log "  Auto-login: ENABLED for $($o.LoginUser)"
             }
 
-            # 7. Printer driver
             Log ""
             Log "=== Installing printer driver ==="
             try {
-                if (-not (Get-PrinterDriver -Name "Generic / Text Only" -ErrorAction SilentlyContinue)) {
+                if (-not (Get-PrinterDriver -Name "Generic / Text Only" `
+                        -ErrorAction SilentlyContinue)) {
                     Add-PrinterDriver -Name "Generic / Text Only" -ErrorAction Stop
                     Log "  Generic / Text Only: installed"
                 } else {
@@ -510,23 +517,25 @@ function Start-WizardInstall {
                 Log "  WARNING: Could not install printer driver (non-fatal): $_"
             }
 
-            # 8. Task Scheduler auto-start
             Log ""
             Log "=== Registering auto-start ==="
             $action    = New-ScheduledTaskAction -Execute $exePath -Argument "--kiosk"
             $trigger   = New-ScheduledTaskTrigger -AtLogOn
             $settings  = New-ScheduledTaskSettingsSet `
                 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-                -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Seconds 0)
+                -StartWhenAvailable `
+                -ExecutionTimeLimit (New-TimeSpan -Seconds 0)
             $principal = New-ScheduledTaskPrincipal `
-                -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-            Register-ScheduledTask -TaskName "Preppy" -Action $action -Trigger $trigger `
+                -UserId "$env:USERDOMAIN\$env:USERNAME" `
+                -LogonType Interactive -RunLevel Limited
+            Register-ScheduledTask -TaskName "Preppy" `
+                -Action $action -Trigger $trigger `
                 -Settings $settings -Principal $principal `
                 -Description "Preppy Label Management System" -Force | Out-Null
-            Log "  Task registered for: $env:USERNAME (launches in kiosk mode at login)"
+            Log "  Task registered for: $env:USERNAME (launches in kiosk mode)"
 
             Log ""
-            Log "=== Setup complete — restart to launch Preppy. ==="
+            Log "=== Setup complete -- restart to launch Preppy. ==="
 
         } catch {
             Write-Error $_ -ErrorAction Continue
@@ -535,9 +544,9 @@ function Start-WizardInstall {
 
     $script:job = Start-Job -ScriptBlock $installBlock -ArgumentList $opts
 
-    $timer          = New-Object System.Windows.Forms.Timer
-    $timer.Interval = 200
-    $timer.Add_Tick({
+    $script:pollTimer          = New-Object System.Windows.Forms.Timer
+    $script:pollTimer.Interval = 200
+    $script:pollTimer.Add_Tick({
         $lines = @(Receive-Job $script:job 2>&1)
         foreach ($l in $lines) {
             $logBox.AppendText("$l`r`n")
@@ -546,9 +555,8 @@ function Start-WizardInstall {
         if ($lines.Count -gt 0) { $logBox.ScrollToCaret() }
 
         if ($script:job.State -notin @('Running', 'NotStarted')) {
-            $timer.Stop()
+            $script:pollTimer.Stop()
 
-            # Flush any remaining output
             $lines = @(Receive-Job $script:job 2>&1)
             foreach ($l in $lines) {
                 $logBox.AppendText("$l`r`n")
@@ -568,32 +576,23 @@ function Start-WizardInstall {
                 $btnNext.Text          = "Restart Now"
                 $btnNext.Enabled       = $true
             } else {
-                foreach ($e in $errors) { $logBox.AppendText("`r`nERROR: $($e.Exception.Message)`r`n") }
+                foreach ($e in $errors) {
+                    $logBox.AppendText("`r`nERROR: $($e.Exception.Message)`r`n")
+                    Add-Content -Path $LOG_FILE -Value "ERROR: $($e.Exception.Message)" -Encoding utf8
+                }
                 $logBox.ScrollToCaret()
                 $progBar.Style         = [System.Windows.Forms.ProgressBarStyle]::Blocks
-                $lStatus.Text          = "Installation failed — see log for details"
+                $lStatus.Text          = "Installation failed -- see log for details"
                 $lStatus.ForeColor     = $C_DANGER
                 $script:doneAction     = 'close'
                 $btnNext.Text          = "Close"
                 $btnNext.Enabled       = $true
+                $logBox.AppendText("`r`nFull log saved to: $LOG_FILE`r`n")
             }
         }
     })
-    $timer.Start()
+    $script:pollTimer.Start()
 }
 
-# ── Launch ────────────────────────────────────────────────────────────────────
+# -- Launch -------------------------------------------------------------------
 [System.Windows.Forms.Application]::Run($form)
-
-} catch {
-    $errMsg = $_.Exception.Message
-    "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  FATAL: $errMsg`n$($_.ScriptStackTrace)" |
-        Add-Content -Path $LOG_FILE -Encoding utf8
-    [System.Windows.Forms.MessageBox]::Show(
-        "The setup wizard encountered an unexpected error:`n`n$errMsg`n`nFull log: $LOG_FILE",
-        "Preppy Setup — Error",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Error
-    ) | Out-Null
-    exit 1
-}

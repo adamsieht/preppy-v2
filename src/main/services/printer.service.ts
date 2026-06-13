@@ -30,24 +30,26 @@ async function sendWindowsRaw(printerName: string, zplData: string): Promise<voi
   const psPrinterName = printerName.replace(/'/g, "''")
 
   const psScript = `
+$ErrorActionPreference = 'Stop'
+function Err { return [System.Runtime.InteropServices.Marshal]::GetLastWin32Error() }
 $bytes = [System.IO.File]::ReadAllBytes('${psZplPath}')
 $src = @"
 using System;
 using System.Runtime.InteropServices;
 public class RawPrint {
-  [DllImport("winspool.drv", CharSet=CharSet.Ansi)]
+  [DllImport("winspool.drv", CharSet=CharSet.Ansi, SetLastError=true)]
   public static extern bool OpenPrinter(string n, ref IntPtr h, IntPtr d);
-  [DllImport("winspool.drv")]
+  [DllImport("winspool.drv", SetLastError=true)]
   public static extern bool ClosePrinter(IntPtr h);
-  [DllImport("winspool.drv", CharSet=CharSet.Ansi)]
+  [DllImport("winspool.drv", CharSet=CharSet.Ansi, SetLastError=true)]
   public static extern int StartDocPrinter(IntPtr h, int l, ref DocInfo d);
-  [DllImport("winspool.drv")]
+  [DllImport("winspool.drv", SetLastError=true)]
   public static extern bool StartPagePrinter(IntPtr h);
-  [DllImport("winspool.drv")]
+  [DllImport("winspool.drv", SetLastError=true)]
   public static extern bool WritePrinter(IntPtr h, byte[] b, int n, ref int w);
-  [DllImport("winspool.drv")]
+  [DllImport("winspool.drv", SetLastError=true)]
   public static extern bool EndPagePrinter(IntPtr h);
-  [DllImport("winspool.drv")]
+  [DllImport("winspool.drv", SetLastError=true)]
   public static extern bool EndDocPrinter(IntPtr h);
   [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
   public struct DocInfo { public string pDocName; public string pOutputFile; public string pDataType; }
@@ -56,18 +58,26 @@ public class RawPrint {
 Add-Type -TypeDefinition $src -ErrorAction SilentlyContinue
 $h = [IntPtr]::Zero
 if (-not [RawPrint]::OpenPrinter('${psPrinterName}', [ref]$h, [IntPtr]::Zero)) {
-  throw "OpenPrinter failed — is '${psPrinterName}' installed? Run scripts/setup-printer-windows.ps1"
+  throw "OpenPrinter failed for printer '${psPrinterName}' (Win32 error $(Err)). Is the print queue installed?"
 }
-$di = New-Object RawPrint+DocInfo
-$di.pDocName  = 'Preppy ZPL'
-$di.pDataType = 'RAW'
-[RawPrint]::StartDocPrinter($h, 1, [ref]$di) | Out-Null
-[RawPrint]::StartPagePrinter($h) | Out-Null
-$w = 0
-[RawPrint]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w) | Out-Null
-[RawPrint]::EndPagePrinter($h) | Out-Null
-[RawPrint]::EndDocPrinter($h) | Out-Null
-[RawPrint]::ClosePrinter($h) | Out-Null
+try {
+  $di = New-Object RawPrint+DocInfo
+  $di.pDocName  = 'Preppy ZPL'
+  $di.pDataType = 'RAW'
+  $job = [RawPrint]::StartDocPrinter($h, 1, [ref]$di)
+  if ($job -eq 0) { throw "StartDocPrinter failed (Win32 error $(Err)). The queue may not allow RAW data." }
+  if (-not [RawPrint]::StartPagePrinter($h)) { throw "StartPagePrinter failed (Win32 error $(Err))" }
+  $w = 0
+  if (-not [RawPrint]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w)) {
+    throw "WritePrinter failed (Win32 error $(Err))"
+  }
+  if ($w -ne $bytes.Length) { throw "WritePrinter only wrote $w of $($bytes.Length) bytes" }
+  [RawPrint]::EndPagePrinter($h) | Out-Null
+  [RawPrint]::EndDocPrinter($h) | Out-Null
+} finally {
+  [RawPrint]::ClosePrinter($h) | Out-Null
+}
+Write-Output "OK: wrote $w bytes to '${psPrinterName}'"
 `.trim()
 
   fs.writeFileSync(psFile, psScript, 'utf-8')
@@ -77,13 +87,21 @@ $w = 0
       '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', psFile,
     ], { windowsHide: true })
 
+    let stdout = ''
     let stderr = ''
+    ps.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
     ps.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
+
+    ps.on('error', (err) => {
+      for (const f of [zplFile, psFile]) { try { fs.unlinkSync(f) } catch { /* already gone */ } }
+      reject(new Error(`Could not launch PowerShell: ${String(err)}`))
+    })
 
     ps.on('close', (code) => {
       for (const f of [zplFile, psFile]) { try { fs.unlinkSync(f) } catch { /* already gone */ } }
-      if (code === 0) resolve()
-      else reject(new Error(stderr.trim() || `PowerShell raw print failed (exit ${code})`))
+      if (code === 0) { resolve(); return }
+      const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join(' | ')
+      reject(new Error(detail || `PowerShell raw print failed (exit ${code})`))
     })
   })
 }
@@ -309,4 +327,41 @@ export async function printRaw(args: PrintRawArgs): Promise<PrintResult> {
 
   logInfo(`${simulating ? '[SIMULATE] ' : ''}Static print job complete: ${args.qty}x`)
   return { success: true, simulated: simulating, simulatedPath: lastSimPath || undefined }
+}
+
+/**
+ * Send arbitrary bytes to the configured printer using the platform-aware path
+ * (Windows print queue via the raw spooler API, or a Linux device file). No
+ * template filling, label-home offset, or history logging — used for raw ZPL
+ * debugging and printer calibration commands (e.g. ~JC).
+ */
+export async function sendRawToDevice(data: string): Promise<{ success: boolean; simulated?: boolean; error?: string }> {
+  const config = getConfig()
+  const winPrinter = isWindowsPrinterName(config.printer.device)
+  const deviceExists = winPrinter || fs.existsSync(config.printer.device)
+  const simulating = config.printer.simulate || !deviceExists
+
+  if (simulating) {
+    const simDir = path.join(process.cwd(), 'simulated-labels')
+    try {
+      fs.mkdirSync(simDir, { recursive: true })
+      const outPath = path.join(simDir, `${dayjs().format('YYYY-MM-DD_HH-mm-ss')}_RAW.zpl`)
+      fs.writeFileSync(outPath, data)
+      logInfo(`[SIMULATE] Raw data written to ${outPath}`)
+      return { success: true, simulated: true }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
+  }
+
+  try {
+    if (winPrinter) await sendWindowsRaw(config.printer.device, data)
+    else fs.writeFileSync(config.printer.device, data)
+    logInfo(`Raw data (${data.length} bytes) sent to ${config.printer.device}`)
+    return { success: true }
+  } catch (err) {
+    const error = `Failed to send raw data to ${config.printer.device}: ${String(err)}`
+    logError(error)
+    return { success: false, error }
+  }
 }

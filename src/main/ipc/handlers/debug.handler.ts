@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { IPC } from '../channels'
 import { getConfig } from '../../services/config.service'
+import { sendRawToDevice } from '../../services/printer.service'
 import { getDb } from '../../services/db.service'
 import { logInfo, logWarn } from '../../logger'
 
@@ -75,17 +76,13 @@ export function registerDebugHandlers(): void {
     return info
   })
 
-  ipcMain.handle(IPC.DEBUG_SEND_ZPL, (_event, rawZpl: unknown) => {
+  ipcMain.handle(IPC.DEBUG_SEND_ZPL, async (_event, rawZpl: unknown) => {
     if (typeof rawZpl !== 'string' || !rawZpl.trim()) {
       return { success: false, error: 'ZPL must be a non-empty string' }
     }
-    const config = getConfig()
-    try {
-      fs.writeFileSync(config.printer.device, rawZpl)
-      logWarn(`Raw ZPL sent via debug panel (${rawZpl.length} bytes)`)
-      return { success: true }
-    } catch (err) {
-      return { success: false, error: String(err) }
-    }
+    logWarn(`Raw ZPL sent via debug panel (${rawZpl.length} bytes)`)
+    // Route through the platform-aware printer path so this works with Windows
+    // print queues (device is a queue name, not a writable file path).
+    return sendRawToDevice(rawZpl)
   })
 }

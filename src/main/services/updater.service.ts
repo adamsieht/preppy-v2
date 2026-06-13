@@ -158,9 +158,15 @@ function findPlatformAsset(
 export function getUpdateFilePath(): string {
   let dir: string
   if (app.isPackaged) {
-    dir = process.platform === 'linux' && process.env.APPIMAGE
-      ? path.dirname(process.env.APPIMAGE)
-      : path.dirname(process.execPath)
+    if (process.platform === 'linux' && process.env.APPIMAGE) {
+      dir = path.dirname(process.env.APPIMAGE)
+    } else if (process.platform === 'win32') {
+      // For the portable target, process.execPath is the temp-extracted copy;
+      // place the update next to the real .exe the user launched.
+      dir = path.dirname(windowsTargetExe())
+    } else {
+      dir = path.dirname(process.execPath)
+    }
   } else {
     dir = app.getPath('temp')
   }
@@ -256,8 +262,15 @@ export function applyUpdate(): void {
   throw new Error(`Auto-update is not supported on ${process.platform}`)
 }
 
+// The portable target runs from a temp-extracted copy (process.execPath);
+// PORTABLE_EXECUTABLE_FILE is the actual .exe the user double-clicked, which is
+// what we must replace for the update to persist.
+function windowsTargetExe(): string {
+  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath
+}
+
 function applyUpdateWindows(): void {
-  const currentExe = process.execPath
+  const currentExe = windowsTargetExe()
   const updateExe  = getUpdateFilePath()
   const batchPath  = path.join(path.dirname(currentExe), '_preppy_update.bat')
 

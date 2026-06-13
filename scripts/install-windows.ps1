@@ -48,7 +48,8 @@ param(
     [switch] $DisableUpdates,
     [switch] $AutoLogin,
     [string] $AutoLoginUser     = "",
-    [string] $AutoLoginPassword = ""
+    [string] $AutoLoginPassword = "",
+    [switch] $Quiet             # suppress the interactive restart prompt (used by the GUI wizard)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -208,5 +209,7 @@ Write-Host "To uninstall:"
 Write-Host "  Unregister-ScheduledTask -TaskName 'Preppy' -Confirm:`$false"
 Write-Host "  Remove-Item -Recurse -Force '$InstallDir'"
 Write-Host ""
-$restart = Read-Host "Restart now? [y/N]"
-if ($restart -match '^[Yy]') { Restart-Computer -Force }
+if (-not $Quiet) {
+    $restart = Read-Host "Restart now? [y/N]"
+    if ($restart -match '^[Yy]') { Restart-Computer -Force }
+}

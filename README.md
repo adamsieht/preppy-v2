@@ -170,7 +170,13 @@ Three templates ship by default: **IX** (In Use), **OX** (Opened/Prepped), **UX*
 
 ### Windows Tablets
 
-Run from an **Administrator** PowerShell session. One script does everything: hardens the OS, downloads the latest release, installs the printer driver, and registers a boot autostart.
+#### Option A — Graphical wizard (recommended for end users)
+
+Download `Install Preppy.bat` and `install-wizard.ps1` from the [latest release](https://github.com/adamsieht/preppy-v2/releases/latest), place them in the same folder, and double-click **`Install Preppy.bat`**. It handles UAC elevation automatically, shows a step-by-step wizard to collect options (auto-login, update policy, GitHub token), downloads Preppy, hardens Windows, and registers the boot autostart — no terminal access required.
+
+#### Option B — Command line
+
+Run from an **Administrator** PowerShell session. Note: if you see "running scripts is disabled on this system", use `powershell -ExecutionPolicy Bypass -File ...` rather than running the `.ps1` directly.
 
 **Step 1 — Install Preppy** (OS hardening + download + autostart in one command):
 
@@ -190,16 +196,13 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 `
 
 # Private GitHub repository:
 powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -GitHubToken "ghp_..."
-
-# All options combined:
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 `
-    -GitHubToken "ghp_..." -DisableUpdates `
-    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
 ```
 
-The script will prompt to restart. After the next login, Preppy starts automatically in fullscreen kiosk mode.
+---
 
-**Step 2 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver (installed in Step 1), and selects it. No Zebra drivers needed, no manual configuration.
+**After either method:** Preppy starts automatically in fullscreen kiosk mode after the next login.
+
+**Step 2 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver, and selects it. No Zebra drivers needed, no manual configuration.
 
 > **Re-applying OS hardening** (e.g. after a Windows feature update resets policies) without reinstalling Preppy:
 > ```powershell

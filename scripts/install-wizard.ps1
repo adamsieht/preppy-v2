@@ -430,9 +430,14 @@ function Start-WizardInstall {
                 throw "No releases found for $($o.RepoOwner)/$($o.RepoName). A GitHub release with a Windows .exe must be published before Preppy can be downloaded."
             }
 
-            $asset = $release.assets |
-                Where-Object { $_.name -like "*.exe" } |
-                Select-Object -First 1
+            # Prefer the portable build by name; fall back to the largest exe
+            $asset = $release.assets | Where-Object { $_.name -eq "Preppy-portable.exe" } | Select-Object -First 1
+            if (-not $asset) {
+                $asset = $release.assets |
+                    Where-Object { $_.name -like "*.exe" } |
+                    Sort-Object size -Descending |
+                    Select-Object -First 1
+            }
             if (-not $asset) {
                 throw "Release $($release.tag_name) has no .exe file attached. The CI build may still be running -- please try again in a few minutes."
             }

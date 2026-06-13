@@ -575,11 +575,6 @@ function Start-WizardInstall {
             }
 
             Log ""
-            Log "=== Launching Preppy ==="
-            Start-Process -FilePath $exePath
-            Log "  Preppy launched."
-
-            Log ""
             Log "=== Setup complete ==="
 
         } catch {
@@ -620,6 +615,9 @@ function Start-WizardInstall {
                 $script:doneAction     = 'restart'
                 $btnNext.Text          = "Restart Now"
                 $btnNext.Enabled       = $true
+                # Launch from the main thread so it runs in the interactive desktop session
+                $exePath = Join-Path "$env:LOCALAPPDATA\Preppy" "Preppy-portable.exe"
+                if (Test-Path $exePath) { Start-Process -FilePath $exePath }
             } else {
                 foreach ($e in $errors) {
                     $logBox.AppendText("`r`nERROR: $($e.Exception.Message)`r`n")

@@ -6,6 +6,7 @@ import LabelPreview, { PX_PER_DOT } from './LabelPreview'
 interface Props {
   layout: LabelLayout
   values: LabelValues
+  offset?: { x: number; y: number }
 }
 
 /**
@@ -15,7 +16,7 @@ interface Props {
  * centering. Lets the preset cards show exactly what will be printed without
  * changing the surrounding card size or layout.
  */
-export default function ScaledLabelPreview({ layout, values }: Props) {
+export default function ScaledLabelPreview({ layout, values, offset }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(1)
 
@@ -41,7 +42,7 @@ export default function ScaledLabelPreview({ layout, values }: Props) {
     <div ref={ref} className="w-full h-full flex items-center justify-center overflow-hidden">
       <div style={{ width: naturalW * scale, height: naturalH * scale }}>
         <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-          <LabelPreview layout={layout} values={values} />
+          <LabelPreview layout={layout} values={values} offset={offset} />
         </div>
       </div>
     </div>

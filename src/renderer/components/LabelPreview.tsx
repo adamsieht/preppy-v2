@@ -5,18 +5,21 @@ import { resolvePreviewText, resolvePreviewExpiry } from '../pages/Preppy/labelZ
 
 type LabelTemplate = 'IX' | 'OX' | 'UX'
 
-// ── Legacy props (CalibrationTab still uses this form) ──────────────────────
+// ── Legacy props ─────────────────────────────────────────────────────────────
 interface LegacyProps {
   template: LabelTemplate
   durationHrs: number
   layout?: undefined
   values?: undefined
+  offset?: undefined
 }
 
 // ── Layout-based props ──────────────────────────────────────────────────────
 interface LayoutProps {
   layout: LabelLayout
   values: LabelValues
+  /** Shifts printed content within the label boundary (simulates ^LH offset). */
+  offset?: { x: number; y: number }
   template?: undefined
   durationHrs?: undefined
 }
@@ -88,11 +91,13 @@ function DowStrip({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Dayjs
 }
 
 // ── Layout-based preview ────────────────────────────────────────────────────
-function LayoutPreview({ layout, values }: { layout: LabelLayout; values: LabelValues }) {
+function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values: LabelValues; offset?: { x: number; y: number } }) {
   const size   = getLabelSize(layout.sizeKey)
   const expiry = resolvePreviewExpiry(values.durationHrs)
   const w      = size.dotsW * PX_PER_DOT
   const h      = size.dotsH * PX_PER_DOT
+  const ox     = (offset?.x ?? 0) * PX_PER_DOT
+  const oy     = (offset?.y ?? 0) * PX_PER_DOT
 
   return (
     <div style={{
@@ -106,6 +111,8 @@ function LayoutPreview({ layout, values }: { layout: LabelLayout; values: LabelV
       flexShrink: 0,
       userSelect: 'none',
     }}>
+      {/* Content layer — translate simulates ^LH offset without moving the label boundary */}
+      <div style={{ position: 'absolute', inset: 0, transform: `translate(${ox}px, ${oy}px)` }}>
       {layout.stockKey === 'daymark' && layout.dowConfig && (
         <DowStrip layout={layout} expiry={expiry} />
       )}
@@ -152,6 +159,7 @@ function LayoutPreview({ layout, values }: { layout: LabelLayout; values: LabelV
           </div>
         )
       })}
+      </div>
     </div>
   )
 }
@@ -205,7 +213,7 @@ function LegacyPreview({ template, durationHrs }: { template: LabelTemplate; dur
 // ── Public component ────────────────────────────────────────────────────────
 export default function LabelPreview(props: Props) {
   if (props.layout && props.values) {
-    return <LayoutPreview layout={props.layout} values={props.values} />
+    return <LayoutPreview layout={props.layout} values={props.values} offset={props.offset} />
   }
   return <LegacyPreview template={props.template!} durationHrs={props.durationHrs!} />
 }

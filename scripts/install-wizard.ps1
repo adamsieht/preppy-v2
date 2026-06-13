@@ -7,10 +7,30 @@
     latest Preppy release, hardens Windows for kiosk operation, and registers
     Preppy to start automatically at login. No terminal commands required.
 
-    Launch via "Install Preppy.bat" (handles UAC elevation automatically), or:
+    Launch via "Install Preppy.bat", or run directly:
         powershell -ExecutionPolicy Bypass -File install-wizard.ps1
+
+    If the wizard fails to open, check the log file at:
+        %TEMP%\preppy-setup.log
 #>
-#Requires -RunAsAdministrator
+
+# ── Self-elevation ────────────────────────────────────────────────────────────
+# Relaunch as Administrator if needed (triggers UAC prompt, then continues).
+$_principal = New-Object Security.Principal.WindowsPrincipal(
+    [Security.Principal.WindowsIdentity]::GetCurrent()
+)
+if (-not $_principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell -Verb RunAs -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`""
+    )
+    exit 0
+}
+
+$LOG_FILE = Join-Path $env:TEMP "preppy-setup.log"
+"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  Preppy Setup Wizard started" |
+    Out-File $LOG_FILE -Encoding utf8 -Force
+
+try {
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -521,6 +541,7 @@ function Start-WizardInstall {
         $lines = @(Receive-Job $script:job 2>&1)
         foreach ($l in $lines) {
             $logBox.AppendText("$l`r`n")
+            Add-Content -Path $LOG_FILE -Value $l -Encoding utf8
         }
         if ($lines.Count -gt 0) { $logBox.ScrollToCaret() }
 
@@ -529,7 +550,10 @@ function Start-WizardInstall {
 
             # Flush any remaining output
             $lines = @(Receive-Job $script:job 2>&1)
-            foreach ($l in $lines) { $logBox.AppendText("$l`r`n") }
+            foreach ($l in $lines) {
+                $logBox.AppendText("$l`r`n")
+                Add-Content -Path $LOG_FILE -Value $l -Encoding utf8
+            }
             $logBox.ScrollToCaret()
 
             $errors = @($script:job.ChildJobs | ForEach-Object { $_.Error })
@@ -560,3 +584,16 @@ function Start-WizardInstall {
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 [System.Windows.Forms.Application]::Run($form)
+
+} catch {
+    $errMsg = $_.Exception.Message
+    "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')  FATAL: $errMsg`n$($_.ScriptStackTrace)" |
+        Add-Content -Path $LOG_FILE -Encoding utf8
+    [System.Windows.Forms.MessageBox]::Show(
+        "The setup wizard encountered an unexpected error:`n`n$errMsg`n`nFull log: $LOG_FILE",
+        "Preppy Setup — Error",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Error
+    ) | Out-Null
+    exit 1
+}

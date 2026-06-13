@@ -1,18 +1,15 @@
 @echo off
-setlocal
+:: Preppy Setup Wizard launcher
+:: Passes -ExecutionPolicy Bypass so the wizard always loads regardless of
+:: the system's script execution policy.  The wizard itself handles the
+:: UAC elevation prompt if administrator rights are needed.
 
-:: Check for administrator privileges
-net session >nul 2>&1
-if %errorlevel% equ 0 goto :run
-
-:: Not elevated — re-launch this script with UAC prompt
-echo Requesting administrator access...
-powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command ^
-    "Start-Process -FilePath cmd.exe -ArgumentList '/c \"%~f0\"' -Verb RunAs"
-exit /b
-
-:run
-:: Launch the wizard with execution policy bypass (fixes "scripts disabled" error)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-wizard.ps1"
 
-endlocal
+:: Keep window open so any startup error messages remain visible.
+if %errorlevel% neq 0 (
+    echo.
+    echo Setup exited with an error ^(code %errorlevel%^).
+    echo Log file: %TEMP%\preppy-setup.log
+    pause
+)

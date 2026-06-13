@@ -23,5 +23,8 @@
   "logging": {
     "retentionDays": 30,
     "maxFileSizeMb": 10
+  },
+  "ui": {
+    "kioskMode": true
   }
 }

@@ -39,6 +39,8 @@ export interface ElectronAPI {
   saveUpdateSettings: (s: UpdateSettings) => Promise<{ success: boolean }>
   getAppVersion: () => Promise<string>
   quitApp: () => Promise<void>
+  getKioskMode: () => Promise<boolean>
+  setKioskMode: (enabled: boolean) => Promise<{ success: boolean; error?: string }>
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -104,4 +106,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveUpdateSettings: (s: UpdateSettings) => ipcRenderer.invoke(IPC.UPDATE_SAVE_SETTINGS, s),
   getAppVersion: () => ipcRenderer.invoke(IPC.APP_VERSION),
   quitApp:       () => ipcRenderer.invoke(IPC.APP_QUIT),
+  getKioskMode:  () => ipcRenderer.invoke(IPC.APP_GET_KIOSK),
+  setKioskMode:  (enabled: boolean) => ipcRenderer.invoke(IPC.APP_SET_KIOSK, enabled),
 } satisfies ElectronAPI)

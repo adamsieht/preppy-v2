@@ -260,11 +260,11 @@ function scanWindows(currentDevice: string): UsbPrinterDevice[] {
 }
 
 export function scanPrinters(): UsbPrinterDevice[] {
-  const currentDevice = getConfig().printer.device
   try {
+    const currentDevice = getConfig().printer.device
     if (process.platform === 'linux')  return scanLinux(currentDevice)
     if (process.platform === 'win32')  return scanWindows(currentDevice)
-  } catch { /* Unexpected error — return empty list */ }
+  } catch { /* Unexpected error (e.g. config read) — return empty list rather than throwing */ }
   return []
 }
 

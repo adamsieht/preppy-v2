@@ -15,16 +15,29 @@ import { registerDebugHandlers } from './ipc/handlers/debug.handler'
 import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
+import { getConfig } from './services/config.service'
+import { maybePromptFirstRunSetup } from './services/setup.service'
 
-const isDev    = process.env.NODE_ENV === 'development'
-const isKiosk  = !isDev && process.argv.includes('--kiosk')
+const isDev = process.env.NODE_ENV === 'development'
+
+// Kiosk mode defaults ON (full-screen, no window chrome — ideal for a dedicated
+// tablet). It can be toggled off from Appearance settings (persisted in
+// config.local.json), so it no longer depends on a --kiosk launch flag — opening
+// from a plain desktop shortcut still starts in kiosk mode. The legacy --kiosk
+// flag still forces it on.
+function kioskEnabled(): boolean {
+  if (isDev) return false
+  if (process.argv.includes('--kiosk')) return true
+  return getConfig().ui?.kioskMode !== false
+}
 
 function createWindow(): BrowserWindow {
+  const startKiosk = kioskEnabled()
   const win = new BrowserWindow({
     width: 1024,
     height: 768,
-    fullscreen:      isKiosk,
-    kiosk:           isKiosk,
+    fullscreen:      startKiosk,
+    kiosk:           startKiosk,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -57,8 +70,11 @@ app.whenReady().then(() => {
 
   logInfo('IPC handlers registered')
 
-  createWindow()
+  const win = createWindow()
   startSensorPolling()
+
+  // First-run setup offer (packaged Windows only — no-op elsewhere)
+  void maybePromptFirstRunSetup(win)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

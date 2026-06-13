@@ -1,6 +1,6 @@
 {
   "name": "preppy-v2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
@@ -29,6 +29,16 @@
     "files": [
       "dist/**/*",
       "!dist/renderer/**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      },
+      {
+        "from": "scripts",
+        "to": "scripts"
+      }
     ],
     "asarUnpack": [
       "**/*.node"

@@ -78,6 +78,7 @@ export default function GeneralTab() {
   const [cardStyle,    setCardStyle]    = useState<QuickCardStyle>(() => localStorage.getItem(QUICK_CARD_STYLE_KEY) === 'label' ? 'label' : 'standard')
   const [theme,        setTheme]        = useState<AppTheme>(() => (localStorage.getItem(THEME_KEY) as AppTheme) ?? 'dark')
   const [accent,       setAccent]       = useState<AccentColor>(() => (localStorage.getItem(ACCENT_KEY) as AccentColor) ?? 'green')
+  const [kioskMode,    setKioskMode]    = useState(true)
 
   function changeSortField(f: QuickSortField) {
     setSortField(f)
@@ -101,6 +102,11 @@ export default function GeneralTab() {
     document.documentElement.classList.toggle('theme-light', t === 'light')
   }
 
+  function changeKiosk(enabled: boolean) {
+    setKioskMode(enabled)
+    window.electronAPI.setKioskMode(enabled).catch(() => {})
+  }
+
   function changeAccent(a: AccentColor) {
     setAccent(a)
     localStorage.setItem(ACCENT_KEY, a)
@@ -118,6 +124,7 @@ export default function GeneralTab() {
     window.electronAPI.getWifi().then(creds => {
       if (creds) { setWifiSsid(creds.ssid); setWifiPass(creds.pass) }
     })
+    window.electronAPI.getKioskMode().then(setKioskMode).catch(() => {})
     scanWifi()
   }, [])
 
@@ -304,6 +311,19 @@ export default function GeneralTab() {
               ? `Day of Week — currently ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'][getDowAccentIdx()]}; updates automatically at midnight.`
               : `${ACCENT_COLORS.find(a => a.value === accent)?.label ?? 'Green'} — used for buttons, active tabs, and highlights.`
             }
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className={ui.fieldLabel}>Kiosk mode</div>
+          <div className="flex gap-2">
+            <button onClick={() => changeKiosk(true)}  className={classes.segBtn(kioskMode)}>On</button>
+            <button onClick={() => changeKiosk(false)} className={classes.segBtn(!kioskMode)}>Off</button>
+          </div>
+          <div className="text-[#6e7681] text-xs">
+            Launches Preppy full-screen with no window controls — ideal for a dedicated tablet, and applies
+            however the app is opened (desktop shortcut or autostart). Turn off to run in a normal window.
+            Changes apply immediately.
           </div>
         </div>
       </SettingsCard>

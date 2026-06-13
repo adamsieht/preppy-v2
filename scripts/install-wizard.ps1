@@ -280,11 +280,10 @@ $lToken.Font     = $F_UI
 $lToken.Location = New-Object System.Drawing.Point(10, 26)
 $lToken.Size     = New-Object System.Drawing.Size(92, 22)
 
-$tToken                 = New-Object System.Windows.Forms.TextBox
-$tToken.Font            = $F_UI
-$tToken.PlaceholderText = "ghp_...    (leave blank for a public repository)"
-$tToken.Location        = New-Object System.Drawing.Point(106, 24)
-$tToken.Size            = New-Object System.Drawing.Size(380, 26)
+$tToken          = New-Object System.Windows.Forms.TextBox
+$tToken.Font     = $F_UI
+$tToken.Location = New-Object System.Drawing.Point(106, 24)
+$tToken.Size     = New-Object System.Drawing.Size(380, 26)
 
 $grpToken.Controls.AddRange(@($lToken, $tToken))
 $pg2.Controls.Add($grpToken)
@@ -552,7 +551,36 @@ function Start-WizardInstall {
             Log "  Task registered for: $env:USERNAME (launches in kiosk mode)"
 
             Log ""
-            Log "=== Setup complete -- restart to launch Preppy. ==="
+            Log "=== Creating shortcuts ==="
+            $wsh = New-Object -ComObject WScript.Shell
+
+            # Desktop shortcut (all users)
+            $lnkDesktop = $wsh.CreateShortcut("$env:PUBLIC\Desktop\Preppy.lnk")
+            $lnkDesktop.TargetPath       = $exePath
+            $lnkDesktop.WorkingDirectory = $o.InstallDir
+            $lnkDesktop.Description      = "Preppy Label Management System"
+            $lnkDesktop.Save()
+            Log "  Desktop shortcut: $env:PUBLIC\Desktop\Preppy.lnk"
+
+            # Taskbar pin (best-effort — may not work on all Windows 10 builds)
+            try {
+                $shell2 = New-Object -ComObject Shell.Application
+                $folder  = $shell2.Namespace($o.InstallDir)
+                $item    = $folder.ParseName((Split-Path $exePath -Leaf))
+                $pinVerb = $item.Verbs() | Where-Object { $_.Name -replace '&','' -match 'Pin to taskbar' }
+                if ($pinVerb) { $pinVerb.DoIt(); Log "  Taskbar: pinned" }
+                else          { Log "  Taskbar: pin verb not available on this build (skipped)" }
+            } catch {
+                Log "  Taskbar: could not pin (non-fatal): $_"
+            }
+
+            Log ""
+            Log "=== Launching Preppy ==="
+            Start-Process -FilePath $exePath
+            Log "  Preppy launched."
+
+            Log ""
+            Log "=== Setup complete ==="
 
         } catch {
             Write-Error $_ -ErrorAction Continue

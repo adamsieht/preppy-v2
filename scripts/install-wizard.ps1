@@ -411,14 +411,31 @@ function Start-WizardInstall {
             }
             if ($o.Token) { $hdrs['Authorization'] = "Bearer $($o.Token)" }
 
-            $release = Invoke-RestMethod `
-                "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases/latest" `
-                -Headers $hdrs
+            # Try the latest stable release first; fall back to the most recent
+            # release of any kind (including pre-releases) if none exists yet.
+            $release = $null
+            try {
+                $release = Invoke-RestMethod `
+                    "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases/latest" `
+                    -Headers $hdrs
+            } catch {
+                Log "  No stable release found, checking for pre-releases..."
+                try {
+                    $all     = Invoke-RestMethod `
+                        "https://api.github.com/repos/$($o.RepoOwner)/$($o.RepoName)/releases?per_page=10" `
+                        -Headers $hdrs
+                    $release = $all | Where-Object { -not $_.draft } | Select-Object -First 1
+                } catch {}
+            }
+            if (-not $release) {
+                throw "No releases found for $($o.RepoOwner)/$($o.RepoName). A GitHub release with a Windows .exe must be published before Preppy can be downloaded."
+            }
+
             $asset = $release.assets |
                 Where-Object { $_.name -like "*.exe" } |
                 Select-Object -First 1
             if (-not $asset) {
-                throw "No .exe asset found in release $($release.tag_name)."
+                throw "Release $($release.tag_name) has no .exe file attached. The CI build may still be running -- please try again in a few minutes."
             }
             Log "  Version : $($release.tag_name)"
             Log "  File    : $($asset.name)  ($([math]::Round($asset.size/1MB,1)) MB)"

@@ -93,6 +93,7 @@ export function buildStaticLayout(sp: StaticPreset): LabelLayout {
     sizeKey: '2x1',
     stockKey: 'daymark',
     dowConfig: dow,
+    invert: true,
     elements,
   }
 }

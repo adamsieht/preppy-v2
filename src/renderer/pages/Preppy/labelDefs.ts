@@ -14,15 +14,17 @@ export const LABEL_STOCKS: LabelStock[] = [
 ]
 
 // ── Day-of-week strip ────────────────────────────────────────────────────────
-// Default config for a 2"×1" (406×203 dot) Daymark label.
+// Default config for a 2"×1" (406×203 dot) Daymark label, tuned to the physical
+// DissolveMark stock: a tall coloured band across the top with a box around the
+// current day and the week's date numbers printed inside the band.
 // Cells run left→right across the top: Mon(0)…Sun(6).
 // The user can adjust these in the Labels settings to match their specific stock.
 export const DEFAULT_DOW_CONFIG: DowStripConfig = {
-  x: 0, y: 0,
-  cellW: 58, cellH: 28,
+  x: 40, y: 5,
+  cellW: 51, cellH: 88,
   order: 'mon-first',
-  numberY: 32,
-  numberFontSize: 18,
+  numberY: 63,
+  numberFontSize: 30,
 }
 
 // Browser-side colours matching the Daymark DITM pre-printed ink (mon-first, index 0-6).
@@ -57,15 +59,15 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
   // ── Daymark 2"×1" ──────────────────────────────────────────────────────────
   {
     id: 'builtin-daymark-2x1', name: 'Daymark 2×1',
-    isBuiltin: true, sizeKey: '2x1', stockKey: 'daymark',
+    isBuiltin: true, sizeKey: '2x1', stockKey: 'daymark', invert: true,
     dowConfig: { ...DEFAULT_DOW_CONFIG },
     elements: [
-      // IX/OX/UX under the boxed current day, along the top
-      { id: 'e1', type: 'template-id', x: 0,   y: 54,  fontSize: 24, fontWidth: 24, rotation: 0, anchorDowDay: true },
+      // IX/OX/UX centred under the boxed current day, just below the band
+      { id: 'e1', type: 'template-id', x: 0,   y: 98,  fontSize: 40, fontWidth: 40, rotation: 0, anchorDowDay: true },
       // Day of week — bottom-left
-      { id: 'e2', type: 'dow-name',    x: 10,  y: 165, fontSize: 30, fontWidth: 30, rotation: 0 },
-      // Date — bottom-right
-      { id: 'e3', type: 'expiry-date', x: 252, y: 165, fontSize: 30, fontWidth: 30, rotation: 0, dateFormat: 'MM/DD/YY' },
+      { id: 'e2', type: 'dow-name',    x: 20,  y: 145, fontSize: 45, fontWidth: 45, rotation: 0 },
+      // Expiry date — bottom-right (left edge placed so 8-char date ends near the right edge)
+      { id: 'e3', type: 'expiry-date', x: 194, y: 150, fontSize: 40, fontWidth: 40, rotation: 0, dateFormat: 'MM/DD/YY' },
     ],
   },
 
@@ -86,7 +88,7 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
   // ── Daymark 2"×2" ──────────────────────────────────────────────────────────
   {
     id: 'builtin-daymark-2x2', name: 'Daymark 2×2',
-    isBuiltin: true, sizeKey: '2x2', stockKey: 'daymark',
+    isBuiltin: true, sizeKey: '2x2', stockKey: 'daymark', invert: true,
     dowConfig: {
       x: 0, y: 0, cellW: 58, cellH: 56, order: 'mon-first',
       numberY: 62, numberFontSize: 22,
@@ -163,6 +165,7 @@ export function buildQuickItemLayout(active: LabelLayout): LabelLayout {
     sizeKey: active.sizeKey,
     stockKey: active.stockKey,
     dowConfig: active.dowConfig ? { ...active.dowConfig } : undefined,
+    invert: active.invert,
     elements: [
       { id: 'qi-tpl',  type: 'template-id', x: idX,    y: topY,     fontSize: idFs,   fontWidth: idFs,   rotation: 0, anchorDowDay: true },
       { id: 'qi-name', type: 'item-name',   x: margin, y: nameY,    fontSize: nameFs, fontWidth: nameFs, rotation: 0, centerX: true, bold: true },

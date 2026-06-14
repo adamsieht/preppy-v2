@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react'
 import PageLayout from '../../components/PageLayout'
 import AutoDismissAlert from '../../components/AutoDismissAlert'
 import PrintPreview from '../../components/PrintPreview'
+import { loadActiveLayout } from '../Preppy/labelDefs'
+import { generateZpl } from '../Preppy/labelZpl'
 import { useErrorMsg } from '../../hooks/useErrorMsg'
 
 type LabelTemplate = 'IX' | 'OX' | 'UX'
@@ -67,7 +69,8 @@ export default function PrintX() {
   async function handlePrint() {
     setPrinting(true)
     try {
-      const result = await window.electronAPI.print({ template, durationHrs: hrs, qty })
+      const zpl = generateZpl(loadActiveLayout(), { template, durationHrs: hrs })
+      const result = await window.electronAPI.printZpl({ zpl, qty })
       setStatus(result.success
         ? { ok: true, msg: result.simulated
             ? `Simulated ×${qty} → ${result.simulatedPath ?? 'simulated-labels/'}`

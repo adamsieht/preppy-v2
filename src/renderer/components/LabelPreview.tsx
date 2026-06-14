@@ -81,8 +81,8 @@ function DowPrinted({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Day
         boxSizing: 'border-box',
         pointerEvents: 'none',
       }} />
-      {/* Date numbers below strip */}
-      <div style={{ position: 'absolute', top: stripY + cellH + 2, left: stripX, display: 'flex' }}>
+      {/* Date numbers — positioned at the configured numberY (matches the ZPL) */}
+      <div style={{ position: 'absolute', top: cfg.numberY * PX_PER_DOT, left: stripX, display: 'flex' }}>
         {DOW_ABBR.map((_, i) => (
           <div key={i} style={{
             width: cellW, textAlign: 'center',

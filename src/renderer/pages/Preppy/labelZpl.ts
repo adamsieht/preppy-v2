@@ -101,6 +101,9 @@ export function generateZpl(
   const labelW = getLabelSize(layout.sizeKey).dotsW
 
   const lines: string[] = ['^XA']
+  // Invert (^POI) flips the whole label 180°. Used for stock fed so the pre-printed
+  // day-of-week band ends up at the top when read. Affects print only — not the preview.
+  if (layout.invert) lines.push('^POI')
   if (labelHomeX !== 0 || labelHomeY !== 0) {
     lines.push(`^LH${labelHomeX},${labelHomeY}`)
   }

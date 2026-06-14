@@ -61,6 +61,7 @@ export interface LabelLayout {
   stockKey:   LabelStockKey
   elements:   LabelElement[]
   dowConfig?: DowStripConfig   // only when stockKey === 'daymark'
+  invert?:    boolean          // emit ^POI — print upside-down (e.g. DOW band stock fed band-first)
 }
 
 /** Runtime values passed to ZPL/preview generators */

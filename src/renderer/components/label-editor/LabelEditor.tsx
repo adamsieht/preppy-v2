@@ -267,6 +267,20 @@ export default function LabelEditor({ layout: initial, onSave, onCancel }: Props
               </select>
             </div>
 
+            <div className={ui.panel}>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!layout.invert}
+                  onChange={e => setLayout(l => ({ ...l, invert: e.target.checked }))}
+                />
+                <span className={ui.label} style={{ margin: 0 }}>Flip 180° when printing</span>
+              </label>
+              <div className="text-[10px] text-[#768390] mt-1">
+                Prints upside-down (^POI) — for Daymark stock fed so the colour band ends up at the top. The preview stays right-side up.
+              </div>
+            </div>
+
             {/* DOW strip config (daymark only) */}
             {layout.stockKey === 'daymark' && layout.dowConfig && (
               <div className={ui.panel}>

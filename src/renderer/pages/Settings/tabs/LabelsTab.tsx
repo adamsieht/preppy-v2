@@ -2,8 +2,10 @@ import { useState, useMemo, useEffect } from 'react'
 import type { LabelLayout, LabelValues } from '../../Preppy/labelTypes'
 import { BUILTIN_LAYOUTS, DEFAULT_LAYOUT_ID, getLabelSize } from '../../Preppy/labelDefs'
 import { generateZpl } from '../../Preppy/labelZpl'
-import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY, STATIC_PRESETS_ENABLED_KEY } from '../../Preppy/constants'
-import LabelPreview from '../../../components/LabelPreview'
+import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY, STATIC_PRESETS_ENABLED_KEY, LABEL_PREVIEW_STYLE_KEY } from '../../Preppy/constants'
+import type { LabelPreviewStyle } from '../../Preppy/constants'
+import LabelPreview, { PX_PER_DOT } from '../../../components/LabelPreview'
+import SmartLabelPreview, { getLabelPreviewStyle } from '../../../components/SmartLabelPreview'
 import LabelEditor from '../../../components/label-editor/LabelEditor'
 import SettingsCard from '../../../components/settings/SettingsCard'
 import ScaledLabelPreview from '../../../components/ScaledLabelPreview'
@@ -46,6 +48,7 @@ const PREVIEW_VALUES: LabelValues = { template: 'IX', durationHrs: 24, itemName:
 export default function LabelsTab() {
   const [customLayouts, setCustomLayouts] = useState<LabelLayout[]>(loadCustomLayouts)
   const [activeId, setActiveId]           = useState<string>(loadActiveId)
+  const [previewStyle, setPreviewStyle]   = useState<LabelPreviewStyle>(getLabelPreviewStyle)
   const [editingLayout, setEditingLayout] = useState<LabelLayout | null>(null)
   const [copiedId, setCopiedId]           = useState<string | null>(null)
 
@@ -99,6 +102,11 @@ export default function LabelsTab() {
   function selectLayout(id: string) {
     setActiveId(id)
     saveActiveId(id)
+  }
+
+  function changePreviewStyle(style: LabelPreviewStyle) {
+    setPreviewStyle(style)
+    localStorage.setItem(LABEL_PREVIEW_STYLE_KEY, style)
   }
 
   function startNew() {
@@ -167,12 +175,32 @@ export default function LabelsTab() {
             <div className="text-[11px] text-[#768390] mt-1">
               {size.label} · {activeLayout.stockKey === 'daymark' ? 'Daymark DissolveMark' : 'Blank stock'} · {activeLayout.elements.length} elements
             </div>
+
+            {/* Preview style toggle (affects on-screen previews only) */}
+            <div className="flex flex-col gap-1 mt-3">
+              <div className="text-xs text-[#768390]">Preview style</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => changePreviewStyle('friendly')}
+                  className={previewStyle === 'friendly' ? ui.primaryBtn : ui.neutralBtn}
+                >Display-friendly</button>
+                <button
+                  onClick={() => changePreviewStyle('actual')}
+                  className={previewStyle === 'actual' ? ui.primaryBtn : ui.neutralBtn}
+                >Actual ZPL</button>
+              </div>
+              <div className="text-[11px] text-[#768390]">
+                Changes on-screen previews only. Printing always uses the actual layout.
+              </div>
+            </div>
           </div>
 
           {/* Live preview */}
           <div className="flex flex-col items-center gap-1 shrink-0">
             <div className="text-[10px] text-[#768390] mb-0.5 uppercase tracking-wider">Preview</div>
-            <LabelPreview layout={activeLayout} values={PREVIEW_VALUES} />
+            <div style={{ width: size.dotsW * PX_PER_DOT, height: size.dotsH * PX_PER_DOT }}>
+              <SmartLabelPreview layout={activeLayout} values={PREVIEW_VALUES} force={previewStyle} />
+            </div>
           </div>
         </div>
       </SettingsCard>

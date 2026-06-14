@@ -15,7 +15,7 @@ import {
   rectSortingStrategy,
 } from '@dnd-kit/sortable'
 import PageLayout from '../../components/PageLayout'
-import ScaledLabelPreview from '../../components/ScaledLabelPreview'
+import SmartLabelPreview from '../../components/SmartLabelPreview'
 import Clock from '../../components/Clock'
 import PrinterStatus from '../../components/PrinterStatus'
 import { loadActiveLayout } from './labelDefs'
@@ -574,7 +574,7 @@ export default function Preppy() {
                           <div className={classes.cardHead}>{preset.label}</div>
                           <div className={classes.cardBody}>
                             <div onClick={() => void handlePrintStatic(sp, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
-                              <ScaledLabelPreview layout={layout} values={{ template, durationHrs: 0 }} />
+                              <SmartLabelPreview layout={layout} values={{ template, durationHrs: 0 }} />
                             </div>
                             <div className={`${classes.btnRow} shrink-0`}>
                               <button onClick={() => void handlePrintStatic(sp, 5)} className={classes.btn5}>🖨 5</button>
@@ -590,7 +590,7 @@ export default function Preppy() {
                         <div className={classes.cardHead}>{label}</div>
                         <div className={classes.cardBody}>
                           <div onClick={() => void handlePrint(hrs, 1)} className="flex-1 min-h-0" style={{ cursor: 'pointer' }}>
-                            <ScaledLabelPreview layout={activeLayout} values={{ template, durationHrs: hrs }} />
+                            <SmartLabelPreview layout={activeLayout} values={{ template, durationHrs: hrs }} />
                           </div>
                           <div className={`${classes.btnRow} shrink-0`}>
                             <button onClick={() => void handlePrint(hrs, 5)} className={classes.btn5}>🖨 5</button>

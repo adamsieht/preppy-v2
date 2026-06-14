@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import { spawn, execFile } from 'child_process'
 import { promisify } from 'util'
 import { app } from 'electron'
@@ -78,6 +79,36 @@ export async function ensurePrinterSetupOnLaunch(): Promise<void> {
   }
   logInfo(`Printer setup needed (driver=${status.driver}, queue=${status.queue}, usbPort=${status.usbPort}) — launching elevated setup`)
   launch(true)
+}
+
+/**
+ * Create a Start Menu shortcut to the portable exe so Preppy is launchable from
+ * the Start menu. User-level (no admin), created once if missing. No-op unless
+ * we can identify the real portable launcher.
+ */
+export function ensureStartMenuShortcut(): void {
+  if (process.platform !== 'win32' || !app.isPackaged) return
+  const target = process.env.PORTABLE_EXECUTABLE_FILE
+  if (!target || !fs.existsSync(target)) return
+  const lnk = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Preppy.lnk')
+  if (fs.existsSync(lnk)) return
+  const q = (s: string) => s.replace(/'/g, "''")
+  const ps = [
+    `$ws = New-Object -ComObject WScript.Shell`,
+    `$s = $ws.CreateShortcut('${q(lnk)}')`,
+    `$s.TargetPath = '${q(target)}'`,
+    `$s.WorkingDirectory = '${q(path.dirname(target))}'`,
+    `$s.Description = 'Preppy Label Management'`,
+    `$s.Save()`,
+  ].join('; ')
+  try {
+    spawn('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', ps,
+    ], { detached: true, windowsHide: true, stdio: 'ignore' }).unref()
+    logInfo(`Creating Start Menu shortcut at ${lnk}`)
+  } catch (err) {
+    logWarn(`Failed to create Start Menu shortcut: ${String(err)}`)
+  }
 }
 
 /** Manually (re)run printer setup from Settings — shows a visible result window. */

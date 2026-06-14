@@ -78,9 +78,10 @@ export default function PrinterTab() {
       const dev = (cfg as { printer?: { device?: string } })?.printer?.device ?? ''
       setCurrentDevice(dev)
       setManualPath(dev)
-    }).catch(() => {})
-    // Auto-scan on first open
-    handleScan()
+      // Only auto-scan when no printer is configured yet. If one is already set
+      // up, leave the list empty until the user taps Scan.
+      if (!dev) handleScan()
+    }).catch(() => { handleScan() })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -292,8 +293,12 @@ export default function PrinterTab() {
       <SettingsCard title="Detected Devices">
         {!scanned && !scanning && (
           <div className={c.emptyState}>
-            <div className={c.emptyTitle}>Scanning for printers…</div>
-            <div className={c.emptyBody}>Checking for connected USB label printers.</div>
+            <div className={c.emptyTitle}>Tap “Scan Devices” to detect printers</div>
+            <div className={c.emptyBody}>
+              {currentDevice
+                ? `Current printer: ${currentDevice}. Scan only if you need to change it.`
+                : 'Checking for connected USB label printers.'}
+            </div>
           </div>
         )}
 

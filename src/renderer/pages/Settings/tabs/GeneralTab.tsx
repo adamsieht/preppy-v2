@@ -8,6 +8,7 @@ import {
   WIDTH_KEY, PANEL_COLLAPSED_KEY, LEFT_COLLAPSED_KEY,
   QUICK_SORT_FIELD_KEY, QUICK_SORT_DIR_KEY, QUICK_CARD_STYLE_KEY, QUICK_SORT_FIELDS,
   THEME_KEY, ACCENT_KEY, ACCENT_COLORS, DOW_ACCENT_PALETTE, getDowAccentIdx, applyDowAccent,
+  LABEL_PREVIEW_STYLE_KEY,
 } from '../../Preppy/constants'
 import type { QuickSortField, QuickCardStyle, AppTheme, AccentColor } from '../../Preppy/constants'
 import { SHELF_LIFE_ITEMS, importShelfLifeItems } from '../../Preppy/shelfLifeGuide'
@@ -24,6 +25,7 @@ const DISPLAY_PREF_KEYS = [
   QUICK_CARD_STYLE_KEY,
   THEME_KEY,
   ACCENT_KEY,
+  LABEL_PREVIEW_STYLE_KEY,
 ] as const
 
 interface WifiNetwork { ssid: string; signal: number; security: string }
@@ -72,7 +74,7 @@ export default function GeneralTab() {
   const importRef = useRef<HTMLInputElement>(null)
   const [sortField,    setSortField]    = useState<QuickSortField>(() => {
     const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as QuickSortField | null
-    return v && QUICK_SORT_FIELDS.some(o => o.value === v) ? v : 'popular'
+    return v && QUICK_SORT_FIELDS.some(o => o.value === v) ? v : 'cat'
   })
   const [sortAsc,      setSortAsc]      = useState(() => (localStorage.getItem(QUICK_SORT_DIR_KEY) ?? 'desc') === 'asc')
   const [cardStyle,    setCardStyle]    = useState<QuickCardStyle>(() => localStorage.getItem(QUICK_CARD_STYLE_KEY) === 'label' ? 'label' : 'standard')

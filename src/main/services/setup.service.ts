@@ -34,16 +34,22 @@ function scheduledTaskExists(): boolean {
   }
 }
 
-// The portable target runs from a temp-extracted copy; PORTABLE_EXECUTABLE_FILE
-// is the actual .exe the user launched, which is what we want the wizard to install.
-function currentExe(): string {
-  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath
+// The genuine, self-contained installer file is the original portable launcher,
+// exposed as PORTABLE_EXECUTABLE_FILE. process.execPath points at the temp-
+// extracted Electron binary, which is NOT self-contained (no ffmpeg.dll etc.) —
+// copying it produces a broken install, so we never use it as the source.
+function portableLauncher(): string | null {
+  const p = process.env.PORTABLE_EXECUTABLE_FILE
+  return p && fs.existsSync(p) ? p : null
 }
 
 /**
- * Launch the bundled GUI setup wizard. Passes -LocalExe so the wizard installs
- * the copy the user already launched instead of re-downloading it. The wizard
- * self-elevates (its own UAC prompt), so this initial process exits immediately.
+ * Launch the bundled GUI setup wizard. If we can identify the original portable
+ * launcher, pass it as -LocalExe so the wizard installs that copy instead of
+ * re-downloading. Otherwise we omit -LocalExe and the wizard downloads the
+ * release (also self-contained) — we never copy the bare extracted exe, which
+ * would be missing its runtime DLLs. The wizard self-elevates (its own UAC
+ * prompt), so this initial process exits immediately.
  */
 export function launchSetupWizard(): { success: boolean; error?: string } {
   const script = resourcePath('scripts', 'install-wizard.ps1')
@@ -53,11 +59,17 @@ export function launchSetupWizard(): { success: boolean; error?: string } {
     return { success: false, error }
   }
   try {
-    const exe = currentExe()
-    logInfo(`Launching setup wizard with local exe: ${exe}`)
-    const child = spawn('powershell.exe', [
-      '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-LocalExe', exe,
-    ], { detached: true, windowsHide: false, stdio: 'ignore' })
+    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script]
+    const launcher = portableLauncher()
+    if (launcher) {
+      args.push('-LocalExe', launcher)
+      logInfo(`Launching setup wizard, installing local exe: ${launcher}`)
+    } else {
+      logWarn('PORTABLE_EXECUTABLE_FILE unavailable — setup wizard will download the release instead of copying the running exe')
+    }
+    const child = spawn('powershell.exe', args, {
+      detached: true, windowsHide: false, stdio: 'ignore',
+    })
     child.unref()
     return { success: true }
   } catch (err) {

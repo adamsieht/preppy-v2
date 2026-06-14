@@ -7,6 +7,7 @@ export const IPC = {
   PRINTER_SET_DEVICE:     'printer:set-device',
   PRINTER_TEST:           'printer:test',
   PRINTER_SET_LABEL_HOME: 'printer:set-label-home',
+  PRINTER_RUN_SETUP:      'printer:run-setup',
   SENSOR_UPDATE: 'sensor:update',
   SENSOR_LIST: 'sensor:list',
   WIFI_SAVE: 'wifi:save',

@@ -16,7 +16,7 @@ import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 import { getConfig } from './services/config.service'
-import { maybePromptFirstRunSetup } from './services/setup.service'
+import { ensurePrinterSetupOnLaunch } from './services/setup.service'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -70,11 +70,11 @@ app.whenReady().then(() => {
 
   logInfo('IPC handlers registered')
 
-  const win = createWindow()
+  createWindow()
   startSensorPolling()
 
-  // First-run setup offer (packaged Windows only — no-op elsewhere)
-  void maybePromptFirstRunSetup(win)
+  // Ensure the printer driver + queue exist (packaged Windows only — no-op elsewhere)
+  void ensurePrinterSetupOnLaunch()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

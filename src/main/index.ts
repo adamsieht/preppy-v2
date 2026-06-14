@@ -16,7 +16,7 @@ import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 import { getConfig } from './services/config.service'
-import { ensurePrinterSetupOnLaunch } from './services/setup.service'
+import { ensurePrinterSetupOnLaunch, ensureStartMenuShortcut } from './services/setup.service'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -75,6 +75,8 @@ app.whenReady().then(() => {
 
   // Ensure the printer driver + queue exist (packaged Windows only — no-op elsewhere)
   void ensurePrinterSetupOnLaunch()
+  // Add a Start Menu shortcut to the portable exe (packaged Windows only)
+  ensureStartMenuShortcut()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

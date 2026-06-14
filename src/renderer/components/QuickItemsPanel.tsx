@@ -17,7 +17,7 @@ type SortField = QuickSortField
 const VALID_SORTS: SortField[] = ['name', 'cat', 'recent', 'popular', 'recommended']
 function loadSortField(): SortField {
   const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as SortField | null
-  return v && VALID_SORTS.includes(v) ? v : 'popular'
+  return v && VALID_SORTS.includes(v) ? v : 'cat'
 }
 function loadSortAsc(): boolean {
   return (localStorage.getItem(QUICK_SORT_DIR_KEY) ?? 'desc') === 'asc'

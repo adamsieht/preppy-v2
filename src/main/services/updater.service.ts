@@ -1,6 +1,7 @@
 import https from 'https'
 import http from 'http'
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { spawn } from 'child_process'
 import { app } from 'electron'
@@ -272,18 +273,46 @@ function windowsTargetExe(): string {
 function applyUpdateWindows(): void {
   const currentExe = windowsTargetExe()
   const updateExe  = getUpdateFilePath()
-  const batchPath  = path.join(path.dirname(currentExe), '_preppy_update.bat')
+  const psPath     = path.join(os.tmpdir(), '_preppy_update.ps1')
+  const logPath    = path.join(os.tmpdir(), 'preppy-update.log')
+  const q = (s: string) => s.replace(/'/g, "''")
 
-  const batch = [
-    '@echo off',
-    'timeout /t 2 /nobreak >nul',
-    `move /y "${updateExe}" "${currentExe}"`,
-    `start "" "${currentExe}"`,
-    'del /f "%~f0"',
-  ].join('\r\n')
+  // PowerShell is more reliable than a .bat here: it waits for the running exe to
+  // release its lock (the portable launcher takes a moment to exit), retries the
+  // replace, logs each step to %TEMP%\preppy-update.log, then relaunches.
+  const ps = `
+$ErrorActionPreference = 'Continue'
+$log = '${q(logPath)}'
+$src = '${q(updateExe)}'
+$dst = '${q(currentExe)}'
+function Log($m) { "$(Get-Date -Format o)  $m" | Out-File -FilePath $log -Append -Encoding utf8 }
+Log "update start  src=$src  dst=$dst"
+if (-not (Test-Path -LiteralPath $src)) { Log "ERROR: downloaded update not found"; exit 1 }
+$moved = $false
+for ($i = 0; $i -lt 60; $i++) {
+  try {
+    Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
+    $moved = $true
+    Log "replaced target after $i retries"
+    break
+  } catch {
+    Start-Sleep -Milliseconds 500
+  }
+}
+if (-not $moved) { Log "ERROR: could not replace $dst (still locked after 30s)" }
+try {
+  Start-Process -FilePath $dst -WorkingDirectory (Split-Path -Parent $dst)
+  Log "relaunched $dst"
+} catch {
+  Log "ERROR relaunching: $_"
+}
+Remove-Item -LiteralPath '${q(psPath)}' -Force -ErrorAction SilentlyContinue
+`.trim()
 
-  fs.writeFileSync(batchPath, batch, 'utf-8')
-  spawn('cmd.exe', ['/c', batchPath], { detached: true, windowsHide: true, stdio: 'ignore' }).unref()
+  fs.writeFileSync(psPath, ps, 'utf-8')
+  spawn('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', psPath,
+  ], { detached: true, windowsHide: true, stdio: 'ignore' }).unref()
   app.quit()
 }
 

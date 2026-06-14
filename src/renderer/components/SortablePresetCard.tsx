@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import ScaledLabelPreview from './ScaledLabelPreview'
+import SmartLabelPreview from './SmartLabelPreview'
 import { TrashIcon } from './Icons'
 import type { DisplayPreset } from '../pages/Preppy/types'
 import type { LabelLayout, LabelValues } from '../pages/Preppy/labelTypes'
@@ -59,7 +59,7 @@ export default function SortablePresetCard({ preset, previewLayout, previewValue
         )}
       </div>
       <div className="bg-[#090c10] p-2 flex-1 min-h-0">
-        <ScaledLabelPreview layout={previewLayout} values={previewValues} />
+        <SmartLabelPreview layout={previewLayout} values={previewValues} />
       </div>
     </div>
   )

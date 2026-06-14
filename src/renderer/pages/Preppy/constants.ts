@@ -84,6 +84,12 @@ export const QUICK_SORT_FIELDS: { value: QuickSortField; label: string }[] = [
 export const THEME_KEY  = 'preppy-theme'
 export const ACCENT_KEY = 'preppy-accent'
 
+// How label previews render in the UI: a clean display-friendly card (default)
+// or a true-to-print rendering of the actual ZPL layout. Printing always uses
+// the real layout regardless of this setting.
+export const LABEL_PREVIEW_STYLE_KEY = 'preppy-label-preview-style'
+export type LabelPreviewStyle = 'friendly' | 'actual'
+
 export type AppTheme    = 'dark' | 'light'
 export type AccentColor = 'green' | 'blue' | 'purple' | 'orange' | 'red' | 'teal' | 'dow'
 

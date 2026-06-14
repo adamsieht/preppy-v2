@@ -575,8 +575,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                             </>
                           )}
                           <button onClick={() => toggleFavorite(item.id)} className={`shrink-0 w-7 h-7 flex items-center justify-center rounded bg-transparent border-0 cursor-pointer transition-colors opacity-0 group-hover:opacity-100 ${favorites.has(item.id) ? 'opacity-100 text-[#e3b341]' : 'text-[#6e7681] hover:text-[#e3b341]'}`} title={favorites.has(item.id) ? 'Remove from favorites' : 'Add to favorites'}><StarIcon filled={favorites.has(item.id)} /></button>
-                          {isEditing && <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn} title="Edit"><PencilIcon /></button>}
-                          {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn} title="Remove">✕</button>}
+                          {isEditing && <button onClick={() => setEditingItem(item)} className={classes.itemEditBtn(true)} title="Edit"><PencilIcon /></button>}
+                          {isEditing && <button onClick={() => removeItem(item.id)} className={classes.itemDelBtn(true)} title="Remove">✕</button>}
                         </div>
                       )
                     })}

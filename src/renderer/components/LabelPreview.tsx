@@ -29,64 +29,72 @@ type Props = LegacyProps | LayoutProps
 // Pixels per ZPL dot — keeps preview size reasonable
 export const PX_PER_DOT = 0.62
 
-// ── DOW strip (simulates pre-printed Daymark color blocks) ──────────────────
-function DowStrip({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Dayjs }) {
+// ── DOW color cells — pre-printed on label stock, never moves with ^LH ──────
+function DowColorCells({ layout }: { layout: LabelLayout }) {
   const cfg = layout.dowConfig
   if (!cfg) return null
-  const size = getLabelSize(layout.sizeKey)
-  const expiryIdx = dayjsDayToMonFirst(expiry.day())
-
-  // Compute the expiry week's day-of-month numbers (Mon–Sun)
-  const daysFromMon = expiry.day() === 0 ? 6 : expiry.day() - 1
-  const monday = expiry.subtract(daysFromMon, 'day')
-
-  const stripW = size.dotsW * PX_PER_DOT
-  const cellW  = cfg.cellW  * PX_PER_DOT
-  const cellH  = cfg.cellH  * PX_PER_DOT
-  const stripX = cfg.x      * PX_PER_DOT
-  const stripY = cfg.y      * PX_PER_DOT
-  const numY   = cfg.numberY * PX_PER_DOT
-  const numFs  = cfg.numberFontSize * PX_PER_DOT
-
+  const cellW = cfg.cellW * PX_PER_DOT
+  const cellH = cfg.cellH * PX_PER_DOT
+  const stripX = cfg.x   * PX_PER_DOT
+  const stripY = cfg.y   * PX_PER_DOT
   return (
     <div style={{ position: 'absolute', top: stripY, left: stripX, display: 'flex' }}>
-      {DOW_ABBR.map((abbr, i) => {
-        const isExpiry = i === expiryIdx
-        const dayNum   = monday.add(i, 'day').date()
-        return (
-          <div
-            key={i}
-            style={{
-              width: cellW, height: cellH + (numY - cellH) + numFs * 1.4,
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              position: 'relative',
-            }}
-          >
-            {/* Pre-printed color cell */}
-            <div style={{
-              width: cellW, height: cellH,
-              background: DOW_COLORS[i],
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: cellH * 0.55, fontWeight: 700,
-              color: DOW_TEXT_COLORS[i], fontFamily: 'monospace',
-              boxSizing: 'border-box',
-              border: isExpiry ? `${Math.max(2, cellW * 0.06)}px solid #000` : 'none',
-              outline: isExpiry ? `1px solid #000` : 'none',
-            }}>
-              {abbr}
-            </div>
-            {/* Day-of-month number below strip */}
-            <div style={{
-              fontSize: numFs, fontFamily: 'monospace',
-              color: '#111', lineHeight: 1, marginTop: 2,
-              fontWeight: isExpiry ? 900 : 400,
-            }}>
-              {dayNum}
-            </div>
-          </div>
-        )
-      })}
+      {DOW_ABBR.map((abbr, i) => (
+        <div key={i} style={{
+          width: cellW, height: cellH,
+          background: DOW_COLORS[i],
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: cellH * 0.55, fontWeight: 700,
+          color: DOW_TEXT_COLORS[i], fontFamily: 'monospace',
+          boxSizing: 'border-box',
+        }}>
+          {abbr}
+        </div>
+      ))}
     </div>
+  )
+}
+
+// ── DOW printed elements — thermal-printed, moves with ^LH offset ────────────
+// Includes: black box around the expiry day, date numbers below the strip.
+function DowPrinted({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Dayjs }) {
+  const cfg = layout.dowConfig
+  if (!cfg) return null
+  const expiryIdx  = dayjsDayToMonFirst(expiry.day())
+  const daysFromMon = expiry.day() === 0 ? 6 : expiry.day() - 1
+  const monday     = expiry.subtract(daysFromMon, 'day')
+  const cellW   = cfg.cellW         * PX_PER_DOT
+  const cellH   = cfg.cellH         * PX_PER_DOT
+  const stripX  = cfg.x             * PX_PER_DOT
+  const stripY  = cfg.y             * PX_PER_DOT
+  const numFs   = cfg.numberFontSize * PX_PER_DOT
+  const borderW = Math.max(2, cellW * 0.06)
+  return (
+    <>
+      {/* Black box around expiry day */}
+      <div style={{
+        position: 'absolute',
+        left: stripX + expiryIdx * cellW, top: stripY,
+        width: cellW, height: cellH,
+        border: `${borderW}px solid #000`,
+        outline: '1px solid #000',
+        boxSizing: 'border-box',
+        pointerEvents: 'none',
+      }} />
+      {/* Date numbers below strip */}
+      <div style={{ position: 'absolute', top: stripY + cellH + 2, left: stripX, display: 'flex' }}>
+        {DOW_ABBR.map((_, i) => (
+          <div key={i} style={{
+            width: cellW, textAlign: 'center',
+            fontSize: numFs, fontFamily: 'monospace',
+            color: '#111', lineHeight: 1,
+            fontWeight: i === expiryIdx ? 900 : 400,
+          }}>
+            {monday.add(i, 'day').date()}
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
@@ -111,13 +119,16 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
       flexShrink: 0,
       userSelect: 'none',
     }}>
-      {/* DOW strip is pre-printed on the label stock — it never moves with the ^LH offset */}
+      {/* Pre-printed stock — color cells only, never moves */}
       {layout.stockKey === 'daymark' && layout.dowConfig && (
-        <DowStrip layout={layout} expiry={expiry} />
+        <DowColorCells layout={layout} />
       )}
 
-      {/* Printer content — translate simulates the ^LH offset shifting all printed elements */}
+      {/* Thermal-printed content — shifts with ^LH offset */}
       <div style={{ position: 'absolute', inset: 0, transform: `translate(${ox}px, ${oy}px)` }}>
+        {layout.stockKey === 'daymark' && layout.dowConfig && (
+          <DowPrinted layout={layout} expiry={expiry} />
+        )}
       {layout.elements.map(el => {
         const text = resolvePreviewText(el, values)
         if (!text) return null

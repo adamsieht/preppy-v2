@@ -2,24 +2,20 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import PageLayout from '../../components/PageLayout'
 import GeneralTab from './tabs/GeneralTab'
 import PrinterTab from './tabs/PrinterTab'
-import CalibrationTab from './tabs/CalibrationTab'
-import NetworkTab from './tabs/NetworkTab'
 import DateTimeTab from './tabs/DateTimeTab'
 import LabelsTab from './tabs/LabelsTab'
 import UpdatesTab from './tabs/UpdatesTab'
 
-type TabKey = 'general' | 'printer' | 'calibration' | 'network' | 'datetime' | 'labels' | 'updates'
+type TabKey = 'general' | 'printer' | 'datetime' | 'labels' | 'updates'
 
 // Tab registry — add a new entry here to add a settings category. The sidebar and
 // content area are both driven off this list, so no other wiring is needed.
 const TABS: { key: TabKey; title: string; icon: string; Component: React.ComponentType }[] = [
-  { key: 'general',     title: 'General',     icon: '🗂',  Component: GeneralTab },
-  { key: 'printer',     title: 'Printer',     icon: '🖨',  Component: PrinterTab },
-  { key: 'calibration', title: 'Calibration', icon: '🎯', Component: CalibrationTab },
-  { key: 'network',     title: 'Network',     icon: '📶', Component: NetworkTab },
-  { key: 'datetime',    title: 'Date & Time', icon: '🕐', Component: DateTimeTab },
-  { key: 'labels',      title: 'Labels',      icon: '🏷', Component: LabelsTab  },
-  { key: 'updates',     title: 'Updates',     icon: '⬆', Component: UpdatesTab },
+  { key: 'general',  title: 'General',     icon: '🗂', Component: GeneralTab },
+  { key: 'printer',  title: 'Printer',     icon: '🖨', Component: PrinterTab },
+  { key: 'datetime', title: 'Date & Time', icon: '🕐', Component: DateTimeTab },
+  { key: 'labels',   title: 'Labels',      icon: '🏷', Component: LabelsTab  },
+  { key: 'updates',  title: 'Updates',     icon: '⬆', Component: UpdatesTab },
 ]
 
 // External pages reachable from the settings sidebar (kept as their own routes).

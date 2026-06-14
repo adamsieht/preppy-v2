@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import SettingsCard from '../../../components/settings/SettingsCard'
 import { ui } from '../../../components/settings/styles'
 import { loadItems, loadUserCats, persist } from '../../Preppy/utils'
@@ -12,6 +12,9 @@ import {
 import type { QuickSortField, QuickCardStyle, AppTheme, AccentColor } from '../../Preppy/constants'
 import { SHELF_LIFE_ITEMS, importShelfLifeItems } from '../../Preppy/shelfLifeGuide'
 import { LABEL_DATE_CALC_KEY } from '../../Preppy/labelDateCalc'
+import { useErrorMsg } from '../../../hooks/useErrorMsg'
+import Keyboard from 'react-simple-keyboard'
+import 'react-simple-keyboard/build/css/index.css'
 
 const CONFIG_BACKUP_VERSION = 1
 
@@ -23,11 +26,31 @@ const DISPLAY_PREF_KEYS = [
   ACCENT_KEY,
 ] as const
 
+interface WifiNetwork { ssid: string; signal: number; security: string }
+
+function SignalBars({ signal }: { signal: number }) {
+  const bars = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1
+  return (
+    <span className="inline-flex items-end gap-[2px] h-5">
+      {[1,2,3,4].map(b => (
+        <span key={b} className={`inline-block w-[5px] rounded-[1px] ${b <= bars ? 'bg-[#3fb950]' : 'bg-[#30363d]'}`} style={{ height: b * 5 }} />
+      ))}
+    </span>
+  )
+}
+
 const classes = {
   result: (ok: boolean) =>
     `text-sm rounded-lg px-4 py-3 border ${ok ? 'bg-[#0d2818] border-[#238636] text-[#3fb950]' : 'bg-[#21262d] border-[#30363d] text-[#8b949e]'}`,
   segBtn: (active: boolean) =>
     `flex-1 px-4 py-2 rounded-lg border text-sm font-bold cursor-pointer transition-colors ${active ? 'border-[#28a745] bg-[#28a745] text-white' : 'border-[#30363d] bg-transparent text-[#adbac7] hover:border-[#6e7681] hover:text-white'}`,
+  fieldBtn: (active: boolean) =>
+    `min-h-[60px] rounded-xl flex items-center px-4 gap-3 text-left cursor-pointer transition-colors ${active ? 'border-2 border-[#28a745] bg-[#0d2818]' : 'border border-[#30363d] bg-[#0d1117] hover:border-[#6e7681]'}`,
+  fieldValue: (hasValue: boolean) => `flex-1 text-base ${hasValue ? 'font-semibold text-white' : 'font-normal text-[#484f58]'}`,
+  networkBtn: (selected: boolean) =>
+    `min-h-[60px] rounded-xl flex items-center px-4 gap-[14px] cursor-pointer transition-colors ${selected ? 'border-2 border-[#28a745] bg-[#0d2818]' : 'border border-[#30363d] bg-[#0d1117] hover:border-[#6e7681]'}`,
+  wifiStatus: (ok: boolean) =>
+    `flex items-center gap-2 text-sm rounded-lg px-4 py-3 border ${ok ? 'bg-[#0d2818] border-[#238636] text-[#3fb950]' : 'bg-[#3d1a1a] border-[#f85149] text-[#f85149]'}`,
 }
 
 export default function GeneralTab() {
@@ -37,6 +60,15 @@ export default function GeneralTab() {
   const [resetMsg,       setResetMsg]       = useState<string | null>(null)
   const [backupMsg,      setBackupMsg]      = useState<{ ok: boolean; text: string } | null>(null)
   const [confirmQuit,    setConfirmQuit]    = useState(false)
+  const [wifiSsid,       setWifiSsid]       = useState('')
+  const [wifiPass,       setWifiPass]       = useState('')
+  const [wifiField,      setWifiField]      = useState<'ssid' | 'pass' | null>(null)
+  const [wifiStatus,     setWifiStatus]     = useState<{ ok: boolean; msg: string } | null>(null)
+  const [wifiSaving,     setWifiSaving]     = useState(false)
+  const [networks,       setNetworks]       = useState<WifiNetwork[]>([])
+  const [scanning,       setScanning]       = useState(false)
+  const errorMsg = useErrorMsg()
+  const clearWifiStatus = useCallback(() => setWifiStatus(null), [])
   const importRef = useRef<HTMLInputElement>(null)
   const [sortField,    setSortField]    = useState<QuickSortField>(() => {
     const v = localStorage.getItem(QUICK_SORT_FIELD_KEY) as QuickSortField | null
@@ -80,6 +112,41 @@ export default function GeneralTab() {
       document.documentElement.style.removeProperty('--c-accent-hover')
       document.documentElement.setAttribute('data-accent', a)
     }
+  }
+
+  useEffect(() => {
+    window.electronAPI.getWifi().then(creds => {
+      if (creds) { setWifiSsid(creds.ssid); setWifiPass(creds.pass) }
+    })
+    scanWifi()
+  }, [])
+
+  async function scanWifi() {
+    setScanning(true)
+    try { setNetworks(await window.electronAPI.scanWifi()) }
+    catch (err) { setWifiStatus({ ok: false, msg: errorMsg(err, 'Scan failed') }) }
+    finally { setScanning(false) }
+  }
+
+  function onWifiKey(btn: string) {
+    if (!wifiField) return
+    const setter = wifiField === 'ssid' ? setWifiSsid : setWifiPass
+    setter(prev => {
+      if (btn === '{bksp}')  return prev.slice(0, -1)
+      if (btn === '{space}') return prev + ' '
+      if (btn === '{enter}') { setWifiField(null); return prev }
+      return prev + btn
+    })
+  }
+
+  async function handleWifiSave() {
+    setWifiSaving(true); setWifiStatus(null); setWifiField(null)
+    try {
+      const r = await window.electronAPI.saveWifi({ ssid: wifiSsid, pass: wifiPass })
+      setWifiStatus(r.success ? { ok: true, msg: 'WiFi saved and applied.' } : { ok: false, msg: r.error ?? 'Save failed' })
+    } catch (err) {
+      setWifiStatus({ ok: false, msg: errorMsg(err, 'Save failed') })
+    } finally { setWifiSaving(false) }
   }
 
   function handleImport() {
@@ -376,6 +443,69 @@ export default function GeneralTab() {
           The exported file does not include your GitHub token or usage history. Import restores all other settings and reloads the app.
         </div>
       </SettingsCard>
+
+      {/* ── Network ── */}
+      <div className="border-t border-[#21262d] pt-5 flex flex-col gap-5">
+        {wifiStatus && (
+          <div className={classes.wifiStatus(wifiStatus.ok)}>
+            <span className="flex-1">{wifiStatus.ok ? '✓ ' : '✗ '}{wifiStatus.msg}</span>
+            <button onClick={clearWifiStatus} className="shrink-0 font-bold text-lg leading-none opacity-75">×</button>
+          </div>
+        )}
+
+        <SettingsCard title="WiFi Credentials" desc="Tap a field to type with the on-screen keyboard, or pick a detected network below.">
+          <div className="flex flex-col gap-2">
+            {([
+              { id: 'ssid' as const, label: 'Network',  value: wifiSsid },
+              { id: 'pass' as const, label: 'Password', value: wifiPass, password: true },
+            ]).map(({ id, label, value, password }) => (
+              <button key={id} onClick={() => setWifiField(id)} className={classes.fieldBtn(wifiField === id)}>
+                <span className="min-w-[80px] text-[#6e7681] text-sm">{label}</span>
+                <span className={classes.fieldValue(!!value)}>
+                  {value ? (password ? '•'.repeat(value.length) : value) : `Tap to enter ${label.toLowerCase()}`}
+                </span>
+                {wifiField === id && <span className="text-xs text-[#3fb950]">editing</span>}
+              </button>
+            ))}
+          </div>
+          {wifiField && (
+            <div className="settings-keyboard pt-2">
+              <Keyboard
+                onKeyPress={onWifiKey}
+                layout={{
+                  default: ['` 1 2 3 4 5 6 7 8 9 0 - = {bksp}', 'q w e r t y u i o p [ ] \\', "a s d f g h j k l ; '", 'z x c v b n m , . /', '{space} {enter}'],
+                  shift:   ['~ ! @ # $ % ^ & * ( ) _ + {bksp}', 'Q W E R T Y U I O P { } |', 'A S D F G H J K L : "', 'Z X C V B N M < > ?', '{space} {enter}'],
+                }}
+                mergeDisplay
+                display={{ '{bksp}': '⌫', '{space}': 'Space', '{enter}': 'Done ↵' }}
+              />
+            </div>
+          )}
+          <button onClick={() => void handleWifiSave()} disabled={wifiSaving || !wifiSsid || !wifiPass} className={`mt-1 ${ui.primaryBtn}`}>
+            {wifiSaving ? 'Saving…' : 'Save & Apply'}
+          </button>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Available Networks"
+          right={<button onClick={() => void scanWifi()} disabled={scanning} className={ui.neutralBtn}>{scanning ? 'Scanning…' : '⟳ Scan'}</button>}
+        >
+          <div className="flex flex-col gap-[6px]">
+            {networks.length === 0 && !scanning && <p className="text-[#6e7681] text-sm">No networks found.</p>}
+            {networks.map(n => (
+              <button key={n.ssid} onClick={() => { setWifiSsid(n.ssid); setWifiField('pass') }} className={classes.networkBtn(wifiSsid === n.ssid)}>
+                <SignalBars signal={n.signal} />
+                <div className="flex-1 text-left">
+                  <div className="font-semibold text-white text-[1.05rem]">{n.ssid}</div>
+                  <div className="text-xs text-[#6e7681]">{n.security || 'Open'}</div>
+                </div>
+                <span className="text-sm text-[#6e7681]">{n.signal}%</span>
+                {n.security && <span>🔒</span>}
+              </button>
+            ))}
+          </div>
+        </SettingsCard>
+      </div>
 
       {/* ── Exit (tucked away at the bottom) ── */}
       <div className="pt-4 border-t border-[#21262d]">

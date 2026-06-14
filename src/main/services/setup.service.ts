@@ -1,122 +1,90 @@
 import fs from 'fs'
-import path from 'path'
-import { spawn, execFileSync } from 'child_process'
-import { app, dialog, BrowserWindow } from 'electron'
+import { spawn, execFile } from 'child_process'
+import { promisify } from 'util'
+import { app } from 'electron'
 import { resourcePath } from './config.service'
 import { logInfo, logWarn, logError } from '../logger'
 
-const SETUP_STATE_FILE = 'setup-state.json'
+const execFileAsync = promisify(execFile)
 
-interface SetupState { dontAsk?: boolean }
+const QUEUE_NAME  = 'Zebra ZPL'
+const DRIVER_NAME = 'Generic / Text Only'
 
-function statePath(): string {
-  return path.join(app.getPath('userData'), SETUP_STATE_FILE)
+function scriptPath(): string {
+  return resourcePath('scripts', 'setup-printer-windows.ps1')
 }
 
-function readState(): SetupState {
-  try { return JSON.parse(fs.readFileSync(statePath(), 'utf-8')) as SetupState }
-  catch { return {} }
-}
+interface PrinterStatus { driver: boolean; queue: boolean; usbPort: boolean }
 
-function writeState(state: SetupState): void {
-  try { fs.writeFileSync(statePath(), JSON.stringify(state, null, 2), 'utf-8') }
-  catch (err) { logWarn(`Failed to write setup state: ${String(err)}`) }
-}
-
-// The installer registers a "Preppy" scheduled task; its presence is our signal
-// that setup has already run on this machine.
-function scheduledTaskExists(): boolean {
+// Non-elevated probe: does the driver/queue exist, and is a USB printer port present?
+// Querying the spooler needs no admin, so we can decide whether elevation is worth it.
+async function probe(): Promise<PrinterStatus | null> {
+  const command = [
+    `$d = [bool](Get-PrinterDriver -Name '${DRIVER_NAME}' -ErrorAction SilentlyContinue)`,
+    `$q = [bool](Get-Printer -Name '${QUEUE_NAME}' -ErrorAction SilentlyContinue)`,
+    `$u = (@(Get-PrinterPort -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^USB' }).Count -gt 0)`,
+    `Write-Output "$d|$q|$u"`,
+  ].join('; ')
   try {
-    execFileSync('schtasks', ['/Query', '/TN', 'Preppy'], { stdio: 'ignore', timeout: 5000 })
-    return true
-  } catch {
-    return false
+    const { stdout } = await execFileAsync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command,
+    ], { timeout: 15000, windowsHide: true })
+    const [d, q, u] = stdout.trim().split('|')
+    return { driver: d === 'True', queue: q === 'True', usbPort: u === 'True' }
+  } catch (err) {
+    logWarn(`Printer probe failed: ${String(err)}`)
+    return null
   }
 }
 
-// The genuine, self-contained installer file is the original portable launcher,
-// exposed as PORTABLE_EXECUTABLE_FILE. process.execPath points at the temp-
-// extracted Electron binary, which is NOT self-contained (no ffmpeg.dll etc.) —
-// copying it produces a broken install, so we never use it as the source.
-function portableLauncher(): string | null {
-  const p = process.env.PORTABLE_EXECUTABLE_FILE
-  return p && fs.existsSync(p) ? p : null
-}
-
-/**
- * Launch the bundled GUI setup wizard. If we can identify the original portable
- * launcher, pass it as -LocalExe so the wizard installs that copy instead of
- * re-downloading. Otherwise we omit -LocalExe and the wizard downloads the
- * release (also self-contained) — we never copy the bare extracted exe, which
- * would be missing its runtime DLLs. The wizard self-elevates (its own UAC
- * prompt), so this initial process exits immediately.
- */
-export function launchSetupWizard(): { success: boolean; error?: string } {
-  const script = resourcePath('scripts', 'install-wizard.ps1')
+// Launch the self-elevating printer-setup script (quiet = hidden, no prompts).
+function launch(quiet: boolean): { success: boolean; error?: string } {
+  const script = scriptPath()
   if (!fs.existsSync(script)) {
-    const error = `Setup wizard not found at ${script}`
+    const error = `Printer setup script not found at ${script}`
     logError(error)
     return { success: false, error }
   }
   try {
     const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script]
-    const launcher = portableLauncher()
-    if (launcher) {
-      args.push('-LocalExe', launcher)
-      logInfo(`Launching setup wizard, installing local exe: ${launcher}`)
-    } else {
-      logWarn('PORTABLE_EXECUTABLE_FILE unavailable — setup wizard will download the release instead of copying the running exe')
-    }
+    if (quiet) args.push('-Quiet')
     const child = spawn('powershell.exe', args, {
-      detached: true, windowsHide: false, stdio: 'ignore',
+      detached: true, windowsHide: quiet, stdio: 'ignore',
     })
     child.unref()
     return { success: true }
   } catch (err) {
-    const error = `Failed to launch setup wizard: ${String(err)}`
+    const error = `Failed to launch printer setup: ${String(err)}`
     logError(error)
     return { success: false, error }
   }
 }
 
 /**
- * On first run (packaged Windows only), if Preppy isn't installed yet and the
- * user hasn't opted out, offer to launch the bundled setup wizard.
+ * On launch (packaged Windows), make sure the Generic/Text Only driver and the
+ * Zebra ZPL queue exist so the printer can be detected and printed to. Runs the
+ * elevated setup only when something is actually missing (driver absent, or
+ * queue absent while a USB printer is connected), so it won't prompt on every
+ * launch. Touches only the print spooler — no other Windows settings.
  */
-export async function maybePromptFirstRunSetup(win: BrowserWindow): Promise<void> {
+export async function ensurePrinterSetupOnLaunch(): Promise<void> {
   if (process.platform !== 'win32' || !app.isPackaged) return
-  if (scheduledTaskExists()) return
-  if (readState().dontAsk) return
-
-  let response = 1
-  let checkboxChecked = false
-  try {
-    const result = await dialog.showMessageBox(win, {
-      type: 'question',
-      buttons: ['Set Up Now', 'Not Now'],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Preppy Setup',
-      message: 'Set up Preppy on this tablet?',
-      detail:
-        'This installs Preppy to your user folder and configures it to launch ' +
-        'automatically in kiosk mode, installs the label-printer driver, and ' +
-        'adjusts power/sleep settings so the tablet stays on.\n\n' +
-        'Windows will show an administrator prompt to allow the changes.',
-      checkboxLabel: "Don't ask again",
-      checkboxChecked: false,
-      noLink: true,
-    })
-    response = result.response
-    checkboxChecked = result.checkboxChecked
-  } catch (err) {
-    logWarn(`First-run setup prompt failed: ${String(err)}`)
+  const status = await probe()
+  if (!status) return
+  const needed = !status.driver || (!status.queue && status.usbPort)
+  if (!needed) {
+    logInfo(`Printer setup OK (driver=${status.driver}, queue=${status.queue})`)
     return
   }
+  logInfo(`Printer setup needed (driver=${status.driver}, queue=${status.queue}, usbPort=${status.usbPort}) — launching elevated setup`)
+  launch(true)
+}
 
-  if (response === 0) {
-    launchSetupWizard()
-  } else if (checkboxChecked) {
-    writeState({ dontAsk: true })
+/** Manually (re)run printer setup from Settings — shows a visible result window. */
+export function runPrinterSetup(): { success: boolean; error?: string } {
+  if (process.platform !== 'win32') {
+    return { success: false, error: 'Printer setup is only required on Windows.' }
   }
+  logInfo('Manual printer setup requested')
+  return launch(false)
 }

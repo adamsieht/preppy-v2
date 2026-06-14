@@ -70,6 +70,8 @@ export default function PrinterTab() {
   const [working, setWorking]   = useState<string | null>(null)
   const [testPrintSent, setTestPrintSent] = useState(() => localStorage.getItem(TEST_PRINT_KEY) === '1')
   const [checklistDismissed, setChecklistDismissed] = useState(() => localStorage.getItem(CHECKLIST_DISMISS) === '1')
+  const [settingUp, setSettingUp] = useState(false)
+  const [setupMsg, setSetupMsg] = useState<{ ok: boolean; msg: string } | null>(null)
 
   useEffect(() => {
     window.electronAPI.getConfig().then((cfg: unknown) => {
@@ -102,6 +104,24 @@ export default function PrinterTab() {
       setFeedback({ path: '', ok: false, msg: `Scan failed: ${err instanceof Error ? err.message : String(err)}` })
     } finally {
       setScanning(false)
+    }
+  }
+
+  async function handlePrinterSetup() {
+    setSettingUp(true)
+    setSetupMsg(null)
+    try {
+      const r = await window.electronAPI.runPrinterSetup()
+      if (r.success) {
+        setSetupMsg({ ok: true, msg: 'Approve the Windows admin prompt if it appears, then this list will refresh.' })
+        setTimeout(() => { void handleScan() }, 6000)
+      } else {
+        setSetupMsg({ ok: false, msg: r.error ?? 'Could not start printer setup.' })
+      }
+    } catch (err) {
+      setSetupMsg({ ok: false, msg: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setSettingUp(false)
     }
   }
 
@@ -172,6 +192,7 @@ export default function PrinterTab() {
   }
 
   const isLinux = navigator.userAgent.toLowerCase().includes('linux')
+  const isWindows = navigator.userAgent.toLowerCase().includes('windows')
   const setupComplete = !!currentDevice && testPrintSent
   const showChecklist = !checklistDismissed || !setupComplete
 
@@ -248,6 +269,24 @@ export default function PrinterTab() {
           </div>
         )}
       </SettingsCard>
+
+      {/* ── Windows printer setup ── */}
+      {isWindows && (
+        <SettingsCard
+          title="Windows Printer Setup"
+          desc="Installs the print driver and creates the Zebra ZPL queue (one-time Windows admin approval). This runs automatically on launch — use this if no printer is detected."
+        >
+          <button onClick={handlePrinterSetup} disabled={settingUp} className={`self-start ${ui.primaryBtn}`}>
+            {settingUp ? 'Starting…' : 'Install printer driver & queue'}
+          </button>
+          {setupMsg && (
+            <div className={c.feedbackRow(setupMsg.ok)}>
+              <span>{setupMsg.ok ? '✓' : '✗'}</span>
+              <span>{setupMsg.msg}</span>
+            </div>
+          )}
+        </SettingsCard>
+      )}
 
       {/* ── Device list ── */}
       <SettingsCard title="Detected Devices">

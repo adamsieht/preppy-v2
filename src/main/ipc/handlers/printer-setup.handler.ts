@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { IPC } from '../channels'
 import { scanPrinters, testPrinterDevice } from '../../services/usb-detection.service'
 import { setPrinterDevice, setLabelHome, getConfig } from '../../services/config.service'
+import { runPrinterSetup } from '../../services/setup.service'
 import { logInfo } from '../../logger'
 
 export function registerPrinterSetupHandlers(): void {
@@ -31,6 +32,8 @@ export function registerPrinterSetupHandlers(): void {
     }
     return testPrinterDevice(devicePath.trim())
   })
+
+  ipcMain.handle(IPC.PRINTER_RUN_SETUP, () => runPrinterSetup())
 
   ipcMain.handle(IPC.PRINTER_SET_LABEL_HOME, (_event, x: unknown, y: unknown) => {
     const nx = typeof x === 'number' ? Math.round(x) : parseInt(String(x), 10)

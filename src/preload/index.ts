@@ -26,6 +26,7 @@ export interface ElectronAPI {
   scanPrinters: () => Promise<UsbPrinterDevice[]>
   setPrinterDevice: (path: string) => Promise<{ success: boolean; device?: string; error?: string }>
   testPrinter: (path: string) => Promise<{ success: boolean; error?: string }>
+  runPrinterSetup: () => Promise<{ success: boolean; error?: string }>
   setLabelHome: (x: number, y: number) => Promise<{ success: boolean; x?: number; y?: number; error?: string }>
   setSystemTime: (iso: string) => Promise<{ success: boolean; error?: string }>
   openSystemTimeSettings: () => Promise<{ success: boolean; error?: string }>
@@ -89,6 +90,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   scanPrinters:     ()       => ipcRenderer.invoke(IPC.PRINTER_SCAN),
   setPrinterDevice: (p: string) => ipcRenderer.invoke(IPC.PRINTER_SET_DEVICE, p),
   testPrinter:      (p: string) => ipcRenderer.invoke(IPC.PRINTER_TEST, p),
+  runPrinterSetup:  ()          => ipcRenderer.invoke(IPC.PRINTER_RUN_SETUP),
   setLabelHome:     (x: number, y: number) => ipcRenderer.invoke(IPC.PRINTER_SET_LABEL_HOME, x, y),
   setSystemTime:         (iso: string) => ipcRenderer.invoke(IPC.SYSTEM_SET_TIME, iso),
   openSystemTimeSettings:()            => ipcRenderer.invoke(IPC.SYSTEM_OPEN_TIME_SETTINGS),

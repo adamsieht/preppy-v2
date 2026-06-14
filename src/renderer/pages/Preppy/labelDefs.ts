@@ -27,6 +27,14 @@ export const DEFAULT_DOW_CONFIG: DowStripConfig = {
   numberFontSize: 30,
 }
 
+// Display-only DOW config — same geometry as the real config but numbers sit
+// just below the colour band instead of inside it. This is the pre-tuning
+// rendering from v2.0.0 that reads more cleanly on screen.
+export const DISPLAY_DOW_CONFIG: DowStripConfig = {
+  ...DEFAULT_DOW_CONFIG,
+  numberY: DEFAULT_DOW_CONFIG.y + DEFAULT_DOW_CONFIG.cellH + 3, // = 96
+}
+
 // Browser-side colours matching the Daymark DITM pre-printed ink (mon-first, index 0-6).
 // Order: Mon, Tue, Wed, Thu, Fri, Sat, Sun
 export const DOW_COLORS      = ['#1D6ECC','#E8A800','#CC1E1E','#7A3F1E','#1E8C3C','#E07020','#1A1A1A']

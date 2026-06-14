@@ -36,8 +36,8 @@ export const classes = {
   itemName:        'text-white text-sm font-medium leading-snug truncate',
   itemDur:         'text-[#6e7681] text-xs mt-[2px]',
   itemBtn:         (green: boolean) => `shrink-0 px-3 py-[6px] text-xs font-bold rounded border cursor-pointer disabled:opacity-60 ${green ? 'border-[#28a745] bg-[#28a745] text-white' : 'border-[#30363d] bg-[#0d1117] text-white'}`,
-  itemDelBtn:      'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] text-base leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity',
-  itemEditBtn:     'shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#58a6ff] leading-none px-1 opacity-0 group-hover:opacity-100 transition-opacity flex items-center',
+  itemDelBtn:      (editing: boolean) => `shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#f85149] text-base leading-none px-1 transition-opacity ${editing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`,
+  itemEditBtn:     (editing: boolean) => `shrink-0 bg-transparent border-0 cursor-pointer text-[#6e7681] hover:text-[#58a6ff] leading-none px-1 flex items-center transition-opacity ${editing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`,
   bundleBadge:     'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold text-[#8b949e] bg-[#21262d] border border-[#30363d] mr-[5px]',
   catBadge:        'inline-block shrink-0 px-[5px] py-[1px] rounded text-[9px] font-bold border mr-[5px]',
   filterPill:      (active: boolean) => active

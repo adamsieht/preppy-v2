@@ -179,18 +179,22 @@ export default function LabelsTab() {
             {/* Preview style toggle (affects on-screen previews only) */}
             <div className="flex flex-col gap-1 mt-3">
               <div className="text-xs text-[#768390]">Preview style</div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => changePreviewStyle('friendly')}
                   className={previewStyle === 'friendly' ? ui.primaryBtn : ui.neutralBtn}
                 >Display-friendly</button>
+                <button
+                  onClick={() => changePreviewStyle('display-zpl')}
+                  className={previewStyle === 'display-zpl' ? ui.primaryBtn : ui.neutralBtn}
+                >Display ZPL</button>
                 <button
                   onClick={() => changePreviewStyle('actual')}
                   className={previewStyle === 'actual' ? ui.primaryBtn : ui.neutralBtn}
                 >Actual ZPL</button>
               </div>
               <div className="text-[11px] text-[#768390]">
-                Changes on-screen previews only. Printing always uses the actual layout.
+                Display ZPL uses the pre-tuned rendering that looks cleaner on screen. Printing always uses the actual layout.
               </div>
             </div>
           </div>

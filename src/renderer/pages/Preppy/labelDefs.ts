@@ -1,4 +1,4 @@
-import type { LabelSize, LabelStock, LabelLayout, DowStripConfig } from './labelTypes'
+import type { LabelSize, LabelStock, LabelLayout, LabelElement, DowStripConfig } from './labelTypes'
 import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY } from './constants'
 
 // ── Physical label sizes at 203 DPI ─────────────────────────────────────────
@@ -27,12 +27,17 @@ export const DEFAULT_DOW_CONFIG: DowStripConfig = {
   numberFontSize: 30,
 }
 
-// Display-only DOW config — same geometry as the real config but numbers sit
-// just below the colour band instead of inside it. This is the pre-tuning
-// rendering from v2.0.0 that reads more cleanly on screen.
-export const DISPLAY_DOW_CONFIG: DowStripConfig = {
-  ...DEFAULT_DOW_CONFIG,
-  numberY: DEFAULT_DOW_CONFIG.y + DEFAULT_DOW_CONFIG.cellH + 3, // = 96
+// Display-only ('Display ZPL' preview style) DOW strip for 2"×1" labels — the
+// original v2.0.0 look: a short coloured band that fills the entire top edge
+// with the week's date numbers printed just below it. The print-accurate config
+// above is a tall, narrower band that matches the physical DissolveMark stock
+// but reads oddly on screen. Used for previews only — printing is unaffected.
+export const DISPLAY_DOW_CONFIG_2X1: DowStripConfig = {
+  x: 0, y: 0,
+  cellW: 58, cellH: 28,
+  order: 'mon-first',
+  numberY: 32,
+  numberFontSize: 18,
 }
 
 // Browser-side colours matching the Daymark DITM pre-printed ink (mon-first, index 0-6).
@@ -118,6 +123,33 @@ export const DEFAULT_LAYOUT_ID = 'builtin-daymark-2x1'
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function getLabelSize(key: string): LabelSize {
   return LABEL_SIZES.find(s => s.key === key) ?? LABEL_SIZES[0]
+}
+
+// v2.0.0 element layout for the built-in Daymark 2"×1" — the original text
+// sizing and positions that paired with the full-width short DOW band.
+const DISPLAY_DAYMARK_2X1_ELEMENTS: LabelElement[] = [
+  { id: 'e1', type: 'template-id', x: 0,   y: 54,  fontSize: 24, fontWidth: 24, rotation: 0, anchorDowDay: true },
+  { id: 'e2', type: 'dow-name',    x: 10,  y: 165, fontSize: 30, fontWidth: 30, rotation: 0 },
+  { id: 'e3', type: 'expiry-date', x: 252, y: 165, fontSize: 30, fontWidth: 30, rotation: 0, dateFormat: 'MM/DD/YY' },
+]
+
+/**
+ * Returns a display-only version of a layout for the 'Display ZPL' preview
+ * style: restores the v2.0.0 look for the 2"×1" Daymark strip (full-width short
+ * band, numbers just below it) and the original element sizing for the built-in
+ * Daymark 2×1. Only that strip changed between v2.0.0 and the print-accurate
+ * layout, so everything else passes through unchanged. Previews only — printing
+ * always uses the real layout.
+ */
+export function toDisplayLayout(layout: LabelLayout): LabelLayout {
+  if (layout.stockKey !== 'daymark' || layout.sizeKey !== '2x1' || !layout.dowConfig) {
+    return layout
+  }
+  const dowConfig = { ...DISPLAY_DOW_CONFIG_2X1 }
+  if (layout.id === 'builtin-daymark-2x1') {
+    return { ...layout, dowConfig, elements: DISPLAY_DAYMARK_2X1_ELEMENTS.map(e => ({ ...e })) }
+  }
+  return { ...layout, dowConfig }
 }
 
 /** Resolve the currently-active label layout (built-in + custom, by saved id). */

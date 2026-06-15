@@ -43,7 +43,7 @@ const ZPL_TEMPLATE = `^XA
 describe('printer.service — preview()', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(fs.readFileSync).mockReturnValue(ZPL_TEMPLATE as unknown as Buffer)
+    vi.mocked(fs.readFileSync).mockReturnValue(ZPL_TEMPLATE)
   })
 
   it('fills all placeholders in ZPL output', async () => {
@@ -90,7 +90,7 @@ describe('printer.service — preview()', () => {
 describe('printer.service — print() simulate mode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(fs.readFileSync).mockReturnValue(ZPL_TEMPLATE as unknown as Buffer)
+    vi.mocked(fs.readFileSync).mockReturnValue(ZPL_TEMPLATE)
     vi.mocked(fs.existsSync).mockReturnValue(false)
   })
 

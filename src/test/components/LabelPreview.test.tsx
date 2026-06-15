@@ -1,9 +1,16 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import dayjs from 'dayjs'
 import LabelPreview from '../../renderer/components/LabelPreview'
+import { LABEL_DATE_CALC_KEY } from '../../renderer/pages/Preppy/labelDateCalc'
 
 describe('LabelPreview', () => {
+  beforeEach(() => {
+    // Use standard date math so a 24h label expires exactly +24h; the default
+    // day-first mode would subtract a day (today counts as day 1).
+    localStorage.setItem(LABEL_DATE_CALC_KEY, JSON.stringify({ mode: 'standard' }))
+  })
+
   it('renders the template name', () => {
     render(<LabelPreview template="IX" durationHrs={4} />)
     expect(screen.getByText('IX')).toBeInTheDocument()

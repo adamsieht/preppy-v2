@@ -45,7 +45,11 @@ const FALLBACK_CONFIG: AppConfig = {
   ui: { kioskMode: true },
 }
 
-export function deepMerge<T extends object>(base: T, overrides: Partial<T>): T {
+// Overrides may be nested (e.g. { printer: { simulate: true } }), which the
+// implementation merges recursively — so the parameter is a deep partial.
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
+
+export function deepMerge<T extends object>(base: T, overrides: DeepPartial<T>): T {
   const result = { ...base }
   for (const key of Object.keys(overrides) as (keyof T)[]) {
     const baseVal = base[key]

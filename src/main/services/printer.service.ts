@@ -1,7 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { spawn } from 'child_process'
-import { app } from 'electron'
+import { Worker } from 'worker_threads'
 import dayjs from 'dayjs'
 import { getConfig, resourcePath } from './config.service'
 import { insertPrintJob } from './db.service'
@@ -14,96 +13,98 @@ function isWindowsPrinterName(device: string): boolean {
   return !device.includes('\\') && !device.includes('/') && !/^[A-Za-z]:/.test(device)
 }
 
-// Send raw ZPL bytes to a Windows print queue using the Win32 print spooler API via
-// an inline-compiled C# helper. Avoids driver rendering entirely — bytes go straight
-// through ("RAW" data type). Requires the queue to use Generic / Text Only driver.
-async function sendWindowsRaw(printerName: string, zplData: string): Promise<void> {
-  const ts      = Date.now()
-  const tempDir = app.getPath('temp')
-  const zplFile = path.join(tempDir, `preppy_${ts}.zpl`)
-  const psFile  = path.join(tempDir, `preppy_${ts}.ps1`)
+// --- Windows raw printing via a persistent FFI worker ------------------------
+// Raw ZPL goes to the Windows print queue through the Win32 spooler API
+// (winspool.drv, RAW datatype — no driver rendering). The actual FFI calls run in
+// a long-lived worker thread (see printerWorker.ts) instead of spawning
+// powershell.exe and compiling C# on every print, which cost ~300-500ms each.
+//
+// Keeping it off the main thread, with a per-job timeout that recycles a wedged
+// worker, guarantees a stuck spooler can never freeze the UI or block later prints.
+const WORKER_PATH    = path.join(__dirname, 'printerWorker.js')
+const PRINT_TIMEOUT_MS = 15_000
 
-  fs.writeFileSync(zplFile, zplData, 'utf-8')
-
-  // In PowerShell single-quoted strings backslashes are literal; only ' needs escaping
-  const psZplPath     = zplFile.replace(/'/g, "''")
-  const psPrinterName = printerName.replace(/'/g, "''")
-
-  const psScript = `
-$ErrorActionPreference = 'Stop'
-function Err { return [System.Runtime.InteropServices.Marshal]::GetLastWin32Error() }
-$bytes = [System.IO.File]::ReadAllBytes('${psZplPath}')
-$src = @"
-using System;
-using System.Runtime.InteropServices;
-public class RawPrint {
-  [DllImport("winspool.drv", CharSet=CharSet.Ansi, SetLastError=true)]
-  public static extern bool OpenPrinter(string n, ref IntPtr h, IntPtr d);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool ClosePrinter(IntPtr h);
-  [DllImport("winspool.drv", CharSet=CharSet.Ansi, SetLastError=true)]
-  public static extern int StartDocPrinter(IntPtr h, int l, ref DocInfo d);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool StartPagePrinter(IntPtr h);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool WritePrinter(IntPtr h, byte[] b, int n, ref int w);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool EndPagePrinter(IntPtr h);
-  [DllImport("winspool.drv", SetLastError=true)]
-  public static extern bool EndDocPrinter(IntPtr h);
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]
-  public struct DocInfo { public string pDocName; public string pOutputFile; public string pDataType; }
+interface PendingPrint {
+  resolve: () => void
+  reject: (err: Error) => void
+  timer: ReturnType<typeof setTimeout>
 }
-"@
-Add-Type -TypeDefinition $src -ErrorAction SilentlyContinue
-$h = [IntPtr]::Zero
-if (-not [RawPrint]::OpenPrinter('${psPrinterName}', [ref]$h, [IntPtr]::Zero)) {
-  throw "OpenPrinter failed for printer '${psPrinterName}' (Win32 error $(Err)). Is the print queue installed?"
-}
-try {
-  $di = New-Object RawPrint+DocInfo
-  $di.pDocName  = 'Preppy ZPL'
-  $di.pDataType = 'RAW'
-  $job = [RawPrint]::StartDocPrinter($h, 1, [ref]$di)
-  if ($job -eq 0) { throw "StartDocPrinter failed (Win32 error $(Err)). The queue may not allow RAW data." }
-  if (-not [RawPrint]::StartPagePrinter($h)) { throw "StartPagePrinter failed (Win32 error $(Err))" }
-  $w = 0
-  if (-not [RawPrint]::WritePrinter($h, $bytes, $bytes.Length, [ref]$w)) {
-    throw "WritePrinter failed (Win32 error $(Err))"
+
+let printWorker: Worker | null = null
+let nextJobId = 1
+const pendingPrints = new Map<number, PendingPrint>()
+
+// Reject every in-flight print and drop the worker so the next print starts fresh.
+function failAllPrints(err: Error): void {
+  for (const job of pendingPrints.values()) {
+    clearTimeout(job.timer)
+    job.reject(err)
   }
-  if ($w -ne $bytes.Length) { throw "WritePrinter only wrote $w of $($bytes.Length) bytes" }
-  [RawPrint]::EndPagePrinter($h) | Out-Null
-  [RawPrint]::EndDocPrinter($h) | Out-Null
-} finally {
-  [RawPrint]::ClosePrinter($h) | Out-Null
+  pendingPrints.clear()
+  if (printWorker) {
+    void printWorker.terminate().catch(() => { /* already gone */ })
+    printWorker = null
+  }
 }
-Write-Output "OK: wrote $w bytes to '${psPrinterName}'"
-`.trim()
 
-  fs.writeFileSync(psFile, psScript, 'utf-8')
+function getPrintWorker(): Worker {
+  if (printWorker) return printWorker
 
-  return new Promise((resolve, reject) => {
-    const ps = spawn('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', psFile,
-    ], { windowsHide: true })
-
-    let stdout = ''
-    let stderr = ''
-    ps.stdout?.on('data', (d: Buffer) => { stdout += d.toString() })
-    ps.stderr?.on('data', (d: Buffer) => { stderr += d.toString() })
-
-    ps.on('error', (err) => {
-      for (const f of [zplFile, psFile]) { try { fs.unlinkSync(f) } catch { /* already gone */ } }
-      reject(new Error(`Could not launch PowerShell: ${String(err)}`))
-    })
-
-    ps.on('close', (code) => {
-      for (const f of [zplFile, psFile]) { try { fs.unlinkSync(f) } catch { /* already gone */ } }
-      if (code === 0) { resolve(); return }
-      const detail = [stderr.trim(), stdout.trim()].filter(Boolean).join(' | ')
-      reject(new Error(detail || `PowerShell raw print failed (exit ${code})`))
-    })
+  const worker = new Worker(WORKER_PATH)
+  worker.on('message', (msg: { id: number; ok: boolean; error?: string }) => {
+    const job = pendingPrints.get(msg.id)
+    if (!job) return
+    clearTimeout(job.timer)
+    pendingPrints.delete(msg.id)
+    if (msg.ok) job.resolve()
+    else job.reject(new Error(msg.error || 'Raw print failed'))
   })
+  worker.on('error', (err) => {
+    logError(`Printer worker error: ${String(err)}`)
+    failAllPrints(err instanceof Error ? err : new Error(String(err)))
+  })
+  worker.on('exit', (code) => {
+    if (printWorker === worker) printWorker = null
+    if (code !== 0) failAllPrints(new Error(`Printer worker exited with code ${code}`))
+  })
+  // Don't let the worker keep the process alive on quit.
+  worker.unref()
+
+  printWorker = worker
+  return worker
+}
+
+// Send raw ZPL bytes to a Windows print queue. Resolves once the spooler has
+// accepted the data (which it does even when the printer is offline), rejects with
+// the Win32 error on failure, or rejects + recycles the worker on timeout.
+function sendWindowsRaw(printerName: string, zplData: string): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let worker: Worker
+    try {
+      worker = getPrintWorker()
+    } catch (err) {
+      reject(new Error(`Could not start printer worker: ${String(err)}`))
+      return
+    }
+
+    const id = nextJobId++
+    const timer = setTimeout(() => {
+      pendingPrints.delete(id)
+      // A wedged call must not block future prints — tear the worker down.
+      failAllPrints(new Error('Printer worker timed out'))
+      reject(new Error(`Raw print to "${printerName}" timed out — no spooler response in ${PRINT_TIMEOUT_MS / 1000}s`))
+    }, PRINT_TIMEOUT_MS)
+
+    pendingPrints.set(id, { resolve, reject, timer })
+    worker.postMessage({ id, printerName, data: zplData })
+  })
+}
+
+// Write the payload to the configured printer using the platform-aware path:
+// Windows print queue via the FFI worker, or a Linux/Unix device file.
+async function sendToDevice(payload: string, device: string, winPrinter: boolean): Promise<void> {
+  if (winPrinter) await sendWindowsRaw(device, payload)
+  else fs.writeFileSync(device, payload)
 }
 
 export type LabelTemplate = 'IX' | 'OX' | 'UX'
@@ -228,33 +229,31 @@ export async function print(args: PrintArgs): Promise<PrintResult> {
 
   logInfo(`${simulating ? '[SIMULATE] ' : ''}Printing ${args.qty}x ${args.template} label (${args.durationHrs}h)`)
 
-  for (let i = 0; i < args.qty; i++) {
-    try {
-      if (simulating) {
+  try {
+    if (simulating) {
+      for (let i = 0; i < args.qty; i++) {
         const outPath = path.join(simDir, `${timestamp}_${args.template}_${i + 1}of${args.qty}.zpl`)
         fs.writeFileSync(outPath, filled)
         lastSimPath = outPath
         logDebug(`[SIMULATE] Label ${i + 1}/${args.qty} written to ${outPath}`)
-      } else if (winPrinter) {
-        await sendWindowsRaw(config.printer.device, filled)
-        logDebug(`Label ${i + 1}/${args.qty} sent to Windows printer "${config.printer.device}"`)
-      } else {
-        fs.writeFileSync(config.printer.device, filled)
-        logDebug(`Label ${i + 1}/${args.qty} sent to ${config.printer.device}`)
       }
-    } catch (err) {
-      const error = `Failed to write label ${i + 1}: ${String(err)}`
-      logError(error)
-      insertPrintJob({
-        template: args.template,
-        duration_hrs: args.durationHrs,
-        qty: args.qty,
-        printed_at: dayjs().toISOString(),
-        success: 0,
-        error_msg: error,
-      })
-      return { success: false, error }
+    } else {
+      // All copies go out as one spooler job / device write — no per-label overhead.
+      await sendToDevice(filled.repeat(args.qty), config.printer.device, winPrinter)
+      logDebug(`${args.qty}x ${args.template} label sent to ${config.printer.device}`)
     }
+  } catch (err) {
+    const error = `Failed to print ${args.template} label: ${String(err)}`
+    logError(error)
+    insertPrintJob({
+      template: args.template,
+      duration_hrs: args.durationHrs,
+      qty: args.qty,
+      printed_at: dayjs().toISOString(),
+      success: 0,
+      error_msg: error,
+    })
+    return { success: false, error }
   }
 
   insertPrintJob({
@@ -304,25 +303,23 @@ export async function printRaw(args: PrintRawArgs): Promise<PrintResult> {
 
   logInfo(`${simulating ? '[SIMULATE] ' : ''}Printing ${args.qty}x static label`)
 
-  for (let i = 0; i < args.qty; i++) {
-    try {
-      if (simulating) {
+  try {
+    if (simulating) {
+      for (let i = 0; i < args.qty; i++) {
         const outPath = path.join(simDir, `${timestamp}_STATIC_${i + 1}of${args.qty}.zpl`)
         fs.writeFileSync(outPath, filled)
         lastSimPath = outPath
         logDebug(`[SIMULATE] Static label ${i + 1}/${args.qty} written to ${outPath}`)
-      } else if (winPrinter) {
-        await sendWindowsRaw(config.printer.device, filled)
-        logDebug(`Static label ${i + 1}/${args.qty} sent to Windows printer "${config.printer.device}"`)
-      } else {
-        fs.writeFileSync(config.printer.device, filled)
-        logDebug(`Static label ${i + 1}/${args.qty} sent to ${config.printer.device}`)
       }
-    } catch (err) {
-      const error = `Failed to write static label ${i + 1}: ${String(err)}`
-      logError(error)
-      return { success: false, error }
+    } else {
+      // All copies go out as one spooler job / device write — no per-label overhead.
+      await sendToDevice(filled.repeat(args.qty), config.printer.device, winPrinter)
+      logDebug(`${args.qty}x static label sent to ${config.printer.device}`)
     }
+  } catch (err) {
+    const error = `Failed to print static label: ${String(err)}`
+    logError(error)
+    return { success: false, error }
   }
 
   logInfo(`${simulating ? '[SIMULATE] ' : ''}Static print job complete: ${args.qty}x`)
@@ -355,8 +352,7 @@ export async function sendRawToDevice(data: string): Promise<{ success: boolean;
   }
 
   try {
-    if (winPrinter) await sendWindowsRaw(config.printer.device, data)
-    else fs.writeFileSync(config.printer.device, data)
+    await sendToDevice(data, config.printer.device, winPrinter)
     logInfo(`Raw data (${data.length} bytes) sent to ${config.printer.device}`)
     return { success: true }
   } catch (err) {

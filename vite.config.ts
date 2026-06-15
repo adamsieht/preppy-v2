@@ -17,7 +17,23 @@ export default defineConfig({
           build: {
             outDir: 'dist/main',
             rollupOptions: {
-              external: ['electron', 'better-sqlite3'],
+              external: ['electron', 'better-sqlite3', 'koffi'],
+            },
+          },
+        },
+      },
+      {
+        // Worker thread for off-main-thread raw printing via koffi FFI.
+        // Output lands in dist/main alongside index.js, so the main bundle can
+        // resolve it via path.join(__dirname, 'printerWorker.js').
+        entry: 'src/main/services/printerWorker.ts',
+        vite: {
+          build: {
+            outDir: 'dist/main',
+            // Built after the main entry — must not wipe its index.js output.
+            emptyOutDir: false,
+            rollupOptions: {
+              external: ['koffi'],
             },
           },
         },

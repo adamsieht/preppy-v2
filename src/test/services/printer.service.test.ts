@@ -96,7 +96,7 @@ describe('printer.service — print() simulate mode', () => {
 
   it('simulates when device does not exist', async () => {
     const { print } = await import('../../main/services/printer.service')
-    const result = print({ template: 'IX', durationHrs: 8, qty: 1 })
+    const result = await print({ template: 'IX', durationHrs: 8, qty: 1 })
 
     expect(result.success).toBe(true)
     expect(result.simulated).toBe(true)
@@ -105,7 +105,7 @@ describe('printer.service — print() simulate mode', () => {
 
   it('simulated file path contains template name and label count', async () => {
     const { print } = await import('../../main/services/printer.service')
-    const result = print({ template: 'UX', durationHrs: 24, qty: 2 })
+    const result = await print({ template: 'UX', durationHrs: 24, qty: 2 })
 
     expect(result.simulatedPath).toContain('UX')
     expect(result.simulatedPath).toContain('2of2')
@@ -115,7 +115,7 @@ describe('printer.service — print() simulate mode', () => {
     vi.mocked(fs.readFileSync).mockImplementation(() => { throw new Error('File not found') })
 
     const { print } = await import('../../main/services/printer.service')
-    const result = print({ template: 'UX', durationHrs: 24, qty: 2 })
+    const result = await print({ template: 'UX', durationHrs: 24, qty: 2 })
 
     expect(result.success).toBe(false)
     expect(result.error).toBeDefined()

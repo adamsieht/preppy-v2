@@ -144,7 +144,18 @@ function findPlatformAsset(
   assets: Array<{ name: string; browser_download_url: string; size: number }>,
 ) {
   if (process.platform === 'win32') {
-    return assets.find(a => a.name.endsWith('.exe'))
+    // Only the portable build artifact is a valid update target. A release can
+    // carry other .exe files (e.g. electron-builder's elevate.exe helper, or the
+    // raw win-unpacked Preppy.exe), so match the artifact name explicitly and
+    // never fall back to an elevate helper.
+    const exes = assets.filter(
+      a => a.name.toLowerCase().endsWith('.exe') && !a.name.toLowerCase().includes('elevate'),
+    )
+    return (
+      exes.find(a => a.name === 'Preppy-portable.exe') ??
+      exes.find(a => a.name.toLowerCase().includes('portable')) ??
+      exes[0]
+    )
   }
   if (process.platform === 'linux') {
     const arch = process.arch === 'arm64' ? 'arm64' : 'x64'

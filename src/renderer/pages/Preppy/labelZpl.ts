@@ -2,6 +2,15 @@ import dayjs from 'dayjs'
 import type { LabelLayout, LabelElement, LabelValues, DowStripConfig } from './labelTypes'
 import { dayjsDayToMonFirst, getLabelSize } from './labelDefs'
 import { loadDateCalcSettings, resolveExpiry } from './labelDateCalc'
+import type { LabelDateCalcSettings } from './labelDateCalc'
+
+// Time format used when a same-day label's expiry-date slot shows the time instead
+// of the (useless, always-today) date. Matches the friendly preview card.
+const SAME_DAY_TIME_FORMAT = 'h:mm A'
+
+function isSameDay(durationHrs: number): boolean {
+  return durationHrs > 0 && durationHrs < 24
+}
 
 // ── Date format map (dayjs tokens) ──────────────────────────────────────────
 export const DATE_FORMATS: { key: string; label: string; fmt: string }[] = [
@@ -20,9 +29,14 @@ export const TIME_FORMATS: { key: string; label: string; fmt: string }[] = [
 export const FONT_SIZES = [12, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64]
 
 // ── Element text resolution ─────────────────────────────────────────────────
-function resolveText(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs): string {
+// sameDayAsTime: when true, an expiry-date element on a same-day label (<24h)
+// renders the expiry TIME instead of the date — the date would just be "today".
+function resolveText(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, sameDayAsTime: boolean): string {
   switch (el.type) {
-    case 'expiry-date': return expiry.format(el.dateFormat ?? 'MM/DD/YY')
+    case 'expiry-date':
+      return sameDayAsTime && isSameDay(values.durationHrs)
+        ? expiry.format(SAME_DAY_TIME_FORMAT)
+        : expiry.format(el.dateFormat ?? 'MM/DD/YY')
     case 'expiry-time': return expiry.format(el.dateFormat ?? 'hh:mm A')
     case 'print-date':  return now.format(el.dateFormat ?? 'MM/DD/YY')
     case 'print-time':  return now.format(el.dateFormat ?? 'hh:mm A')
@@ -51,8 +65,8 @@ function dowAnchorX(cfg: DowStripConfig, expiry: dayjs.Dayjs, text: string, font
 }
 
 // ── Element ZPL fragment ────────────────────────────────────────────────────
-function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, dowConfig?: DowStripConfig, labelW = 0): string {
-  const text = resolveText(el, values, now, expiry)
+function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, dowConfig: DowStripConfig | undefined, labelW: number, sameDayAsTime: boolean): string {
+  const text = resolveText(el, values, now, expiry, sameDayAsTime)
   if (!text) return ''
   const fw = el.rotation === 90 ? 'R' : el.rotation === 180 ? 'I' : el.rotation === 270 ? 'B' : 'N'
   const rotate = el.rotation !== 0 ? `^FW${fw}` : ''
@@ -90,15 +104,29 @@ function dowZpl(cfg: DowStripConfig, expiry: dayjs.Dayjs): string {
 }
 
 // ── Main ZPL generator ──────────────────────────────────────────────────────
+export interface GenerateZplOptions {
+  /** Date-calc settings override. Calendar prints pass standard mode to skip the
+   *  day-first 24h subtraction so the label lands on the exact date clicked. */
+  settings?: LabelDateCalcSettings
+  /** Force expiry-date elements to always render the date, even same-day. Calendar
+   *  prints target an explicit date, so the date (not a time) is what's wanted. */
+  forceExpiryDate?: boolean
+}
+
 export function generateZpl(
   layout: LabelLayout,
   values: LabelValues,
   labelHomeX = 0,
   labelHomeY = 0,
+  options: GenerateZplOptions = {},
 ): string {
   const now    = dayjs()
-  const expiry = resolveExpiry(values.durationHrs, loadDateCalcSettings(), now)
+  const expiry = resolveExpiry(values.durationHrs, options.settings ?? loadDateCalcSettings(), now)
   const labelW = getLabelSize(layout.sizeKey).dotsW
+  // Show the time on same-day labels unless this layout has a dedicated expiry-time
+  // element (then the date slot keeps the date) or the caller forces a date.
+  const hasExpiryTime = layout.elements.some(e => e.type === 'expiry-time')
+  const sameDayAsTime = !hasExpiryTime && !options.forceExpiryDate
 
   const lines: string[] = ['^XA']
   // Invert (^POI) flips the whole label 180°. Used for stock fed so the pre-printed
@@ -115,7 +143,7 @@ export function generateZpl(
 
   // User-placed elements
   for (const el of layout.elements) {
-    const fragment = elementZpl(el, values, now, expiry, layout.dowConfig, labelW)
+    const fragment = elementZpl(el, values, now, expiry, layout.dowConfig, labelW, sameDayAsTime)
     if (fragment) lines.push(fragment)
   }
 
@@ -124,10 +152,12 @@ export function generateZpl(
 }
 
 // ── Preview-only value resolver (used by browser preview) ───────────────────
-export function resolvePreviewText(el: LabelElement, values: LabelValues): string {
+// Callers pass sameDayAsTime (computed from whether the layout has an expiry-time
+// element) so the preview matches the printed label's same-day behaviour.
+export function resolvePreviewText(el: LabelElement, values: LabelValues, sameDayAsTime = false): string {
   const now    = dayjs()
   const expiry = resolveExpiry(values.durationHrs, loadDateCalcSettings(), now)
-  return resolveText(el, values, now, expiry)
+  return resolveText(el, values, now, expiry, sameDayAsTime)
 }
 
 export function resolvePreviewExpiry(durationHrs: number): dayjs.Dayjs {

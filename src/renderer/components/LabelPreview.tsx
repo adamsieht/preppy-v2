@@ -102,6 +102,9 @@ function DowPrinted({ layout, expiry }: { layout: LabelLayout; expiry: dayjs.Day
 function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values: LabelValues; offset?: { x: number; y: number } }) {
   const size   = getLabelSize(layout.sizeKey)
   const expiry = resolvePreviewExpiry(values.durationHrs)
+  // Mirror generateZpl: same-day labels show the time unless a dedicated expiry-time
+  // element is present (then the date slot keeps the date).
+  const sameDayAsTime = !layout.elements.some(e => e.type === 'expiry-time')
   const w      = size.dotsW * PX_PER_DOT
   const h      = size.dotsH * PX_PER_DOT
   const ox     = (offset?.x ?? 0) * PX_PER_DOT
@@ -130,7 +133,7 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
           <DowPrinted layout={layout} expiry={expiry} />
         )}
       {layout.elements.map(el => {
-        const text = resolvePreviewText(el, values)
+        const text = resolvePreviewText(el, values, sameDayAsTime)
         if (!text) return null
         const fs = el.fontSize * PX_PER_DOT
         const fw = (el.fontWidth ?? el.fontSize) * PX_PER_DOT

@@ -338,11 +338,17 @@ export default function Preppy() {
   }
 
   // ── Print handlers ────────────────────────────────────────────────────────
-  async function handlePrint(durationHrs: number, qty: number, tpl = template) {
-    const dateCalcSettings = loadDateCalcSettings()
+  async function handlePrint(durationHrs: number, qty: number, tpl = template, opts?: { fromCalendar?: boolean }) {
+    const baseSettings = loadDateCalcSettings()
+    // Calendar prints target the exact date clicked: disable day-first so the
+    // expiry isn't shifted back a day, and always render the date (not a same-day time).
+    const dateCalcSettings = opts?.fromCalendar
+      ? { ...baseSettings, mode: 'standard' as const }
+      : baseSettings
 
-    // EOD redirect: same-day label would cross midnight → print the EOD static label
-    if (wouldExceedMidnight(durationHrs, dateCalcSettings)) {
+    // EOD redirect: same-day label would cross midnight → print the EOD static label.
+    // Skipped for calendar prints, where the clicked date is explicit.
+    if (!opts?.fromCalendar && wouldExceedMidnight(durationHrs, dateCalcSettings)) {
       const eodPreset = BUILTIN_STATIC_PRESETS.find(sp => sp.id === 'static-eod')
       if (eodPreset) return handlePrintStatic(eodPreset, qty)
     }
@@ -370,7 +376,10 @@ export default function Preppy() {
     })
 
     try {
-      const zpl = generateZpl(loadActiveLayout(), { template: tpl, durationHrs })
+      const zpl = generateZpl(loadActiveLayout(), { template: tpl, durationHrs }, 0, 0, {
+        settings: dateCalcSettings,
+        forceExpiryDate: opts?.fromCalendar,
+      })
       const result = await window.electronAPI.printZpl({ zpl, qty })
       if (result.success) {
         await animDone   // wait for animation to finish before showing checkmark
@@ -606,7 +615,7 @@ export default function Preppy() {
               /* ── Calendar picker ── */
               <CalendarPicker
                 template={template}
-                onPrint={handlePrint}
+                onPrint={(hrs, qty) => handlePrint(hrs, qty, template, { fromCalendar: true })}
               />
             )}
 

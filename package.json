@@ -1,6 +1,6 @@
 {
   "name": "preppy-v2",
-  "version": "2.0.9",
+  "version": "2.0.10",
   "private": true,
   "main": "dist/main/index.js",
   "scripts": {
@@ -48,13 +48,23 @@
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "Preppy-portable.exe"
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "artifactName": "Preppy-${arch}.${ext}",
       "category": "Utility",

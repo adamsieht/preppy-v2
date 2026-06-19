@@ -25,6 +25,7 @@ export interface LabelElement {
   dateFormat?: string         // for date/time elements
   bold?:      boolean
   anchorDowDay?: boolean      // daymark only: x tracks the boxed day's column
+  anchorDowEnd?: boolean      // daymark only: right-align right edge to the DOW strip's right edge (Sunday cell)
   centerX?:   boolean         // horizontally centre the element on the label
 }
 

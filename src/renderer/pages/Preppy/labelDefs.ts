@@ -77,10 +77,10 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
     elements: [
       // IX/OX/UX centred under the boxed current day, just below the band
       { id: 'e1', type: 'template-id', x: 0,   y: 98,  fontSize: 40, fontWidth: 40, rotation: 0, anchorDowDay: true },
-      // Day of week — bottom-left
+      // Day of week — bottom-left (auto-fits so it never overlaps the date)
       { id: 'e2', type: 'dow-name',    x: 20,  y: 145, fontSize: 45, fontWidth: 45, rotation: 0 },
-      // Expiry date — bottom-right (left edge placed so 8-char date ends near the right edge)
-      { id: 'e3', type: 'expiry-date', x: 194, y: 150, fontSize: 40, fontWidth: 40, rotation: 0, dateFormat: 'MM/DD/YY' },
+      // Expiry date — bottom-right, right-aligned to the Sunday cell's right edge
+      { id: 'e3', type: 'expiry-date', x: 194, y: 150, fontSize: 40, fontWidth: 40, rotation: 0, dateFormat: 'MM/DD/YY', anchorDowEnd: true },
     ],
   },
 
@@ -109,10 +109,10 @@ export const BUILTIN_LAYOUTS: LabelLayout[] = [
     elements: [
       // IX/OX/UX under the boxed current day, along the top
       { id: 'e1', type: 'template-id', x: 0,   y: 90,  fontSize: 30, fontWidth: 30, rotation: 0, anchorDowDay: true },
-      // Day of week — bottom-left
+      // Day of week — bottom-left (auto-fits so it never overlaps the date)
       { id: 'e2', type: 'dow-name',    x: 12,  y: 352, fontSize: 40, fontWidth: 40, rotation: 0 },
-      // Date — bottom-right
-      { id: 'e3', type: 'expiry-date', x: 183, y: 348, fontSize: 44, fontWidth: 44, rotation: 0, dateFormat: 'MM/DD/YY' },
+      // Date — bottom-right, right-aligned to the Sunday cell's right edge
+      { id: 'e3', type: 'expiry-date', x: 183, y: 348, fontSize: 44, fontWidth: 44, rotation: 0, dateFormat: 'MM/DD/YY', anchorDowEnd: true },
     ],
   },
 ]
@@ -130,7 +130,7 @@ export function getLabelSize(key: string): LabelSize {
 const DISPLAY_DAYMARK_2X1_ELEMENTS: LabelElement[] = [
   { id: 'e1', type: 'template-id', x: 0,   y: 54,  fontSize: 24, fontWidth: 24, rotation: 0, anchorDowDay: true },
   { id: 'e2', type: 'dow-name',    x: 10,  y: 165, fontSize: 30, fontWidth: 30, rotation: 0 },
-  { id: 'e3', type: 'expiry-date', x: 252, y: 165, fontSize: 30, fontWidth: 30, rotation: 0, dateFormat: 'MM/DD/YY' },
+  { id: 'e3', type: 'expiry-date', x: 252, y: 165, fontSize: 30, fontWidth: 30, rotation: 0, dateFormat: 'MM/DD/YY', anchorDowEnd: true },
 ]
 
 /**
@@ -210,7 +210,9 @@ export function buildQuickItemLayout(active: LabelLayout): LabelLayout {
       { id: 'qi-tpl',  type: 'template-id', x: idX,    y: topY,     fontSize: idFs,   fontWidth: idFs,   rotation: 0, anchorDowDay: true },
       { id: 'qi-name', type: 'item-name',   x: margin, y: nameY,    fontSize: nameFs, fontWidth: nameFs, rotation: 0, centerX: true, bold: true },
       { id: 'qi-dow',  type: 'dow-name',    x: margin, y: bottomY,  fontSize: dowFs,  fontWidth: dowFs,  rotation: 0 },
-      { id: 'qi-date', type: 'expiry-date', x: dateX,  y: bottomY,  fontSize: dateFs, fontWidth: dateFs, rotation: 0, dateFormat: 'MM/DD/YY' },
+      // Daymark: right-align to the Sunday cell so it matches the standard layout
+      // (and the dow-name auto-fits). Blank stock falls back to the computed dateX.
+      { id: 'qi-date', type: 'expiry-date', x: dateX,  y: bottomY,  fontSize: dateFs, fontWidth: dateFs, rotation: 0, dateFormat: 'MM/DD/YY', anchorDowEnd: isDaymark },
     ],
   }
 }

@@ -55,29 +55,85 @@ function resolveText(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, ex
   }
 }
 
+// ── Text width / DOW geometry helpers ────────────────────────────────────────
+// Approximate printed width of a string in the scalable ^A0 font. The 0.6 factor
+// is the app-wide estimate used for all centring/alignment math.
+export function estTextWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.6
+}
+
+// Right edge of the DOW strip = right edge of the Sunday cell (Mon..Sun, 7 cells).
+export function dowStripRightEdge(cfg: DowStripConfig): number {
+  return cfg.x + 7 * cfg.cellW
+}
+
+// X that right-aligns `text`'s right edge to the DOW strip's right edge.
+function dowEndAlignedX(cfg: DowStripConfig, text: string, fontSize: number): number {
+  return Math.round(dowStripRightEdge(cfg) - estTextWidth(text, fontSize))
+}
+
 // ── DOW-anchored X ──────────────────────────────────────────────────────────
 // Centres an element under the boxed (expiry) day's column in the DOW strip.
 function dowAnchorX(cfg: DowStripConfig, expiry: dayjs.Dayjs, text: string, fontSize: number): number {
   const idx   = dayjsDayToMonFirst(expiry.day())
   const cellX = cfg.x + idx * cfg.cellW
-  const textW = text.length * fontSize * 0.6
+  const textW = estTextWidth(text, fontSize)
   return Math.round(cellX + Math.max(0, (cfg.cellW - textW) / 2))
 }
 
+// Gap kept between the day-of-week and the right-aligned expiry date.
+const DOW_DATE_GAP = 12
+// Longest day-of-week name — the dow font is sized so this fits, uniformly for
+// every day, so a long name (Wednesday) can never overrun into the date.
+const LONGEST_DOW_NAME = 'Wednesday'
+
+/**
+ * When a daymark layout right-aligns its expiry date to the DOW strip end, the
+ * day-of-week (left) and date (right) can collide for long day names. This
+ * returns a font size for the dow-name element that guarantees the longest day
+ * name fits to the left of the date — or undefined when no adjustment applies
+ * (no DOW strip, or no right-anchored date + dow-name pair).
+ */
+export function computeDowFitSize(layout: LabelLayout, dateText: string): number | undefined {
+  const cfg = layout.dowConfig
+  if (!cfg) return undefined
+  const dateEl = layout.elements.find(e => e.anchorDowEnd)
+  const dowEl  = layout.elements.find(e => e.type === 'dow-name')
+  if (!dateEl || !dowEl) return undefined
+
+  const dateLeft = dowEndAlignedX(cfg, dateText, dateEl.fontSize)
+  const budget   = dateLeft - DOW_DATE_GAP - dowEl.x
+  const natural  = estTextWidth(LONGEST_DOW_NAME, dowEl.fontSize)
+  if (budget <= 0 || natural <= budget) return dowEl.fontSize
+  return Math.max(8, Math.floor(dowEl.fontSize * budget / natural))
+}
+
+interface RenderCtx {
+  dowConfig?: DowStripConfig
+  labelW: number
+  sameDayAsTime: boolean
+  /** Font size for the dow-name element, pre-fitted to avoid overlapping the date. */
+  dowFitSize?: number
+}
+
 // ── Element ZPL fragment ────────────────────────────────────────────────────
-function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, dowConfig: DowStripConfig | undefined, labelW: number, sameDayAsTime: boolean): string {
-  const text = resolveText(el, values, now, expiry, sameDayAsTime)
+function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, expiry: dayjs.Dayjs, ctx: RenderCtx): string {
+  const text = resolveText(el, values, now, expiry, ctx.sameDayAsTime)
   if (!text) return ''
   const fw = el.rotation === 90 ? 'R' : el.rotation === 180 ? 'I' : el.rotation === 270 ? 'B' : 'N'
   const rotate = el.rotation !== 0 ? `^FW${fw}` : ''
-  const w = el.fontWidth ?? el.fontSize
-  const textW = text.length * el.fontSize * 0.6
-  const baseX = el.anchorDowDay && dowConfig
-    ? dowAnchorX(dowConfig, expiry, text, el.fontSize)
-    : el.centerX && labelW
-      ? Math.round((labelW - textW) / 2)
-      : el.x
-  const draw = (dx: number) => `${rotate}^FO${baseX + dx},${el.y}^A0N,${el.fontSize},${w}^FD${text}^FS`
+  // dow-name font may be shrunk to fit; scale width by the same ratio.
+  const fontSize = el.type === 'dow-name' && ctx.dowFitSize ? ctx.dowFitSize : el.fontSize
+  const w = Math.round((el.fontWidth ?? el.fontSize) * (fontSize / el.fontSize))
+  const textW = estTextWidth(text, fontSize)
+  const baseX = el.anchorDowEnd && ctx.dowConfig
+    ? dowEndAlignedX(ctx.dowConfig, text, fontSize)
+    : el.anchorDowDay && ctx.dowConfig
+      ? dowAnchorX(ctx.dowConfig, expiry, text, fontSize)
+      : el.centerX && ctx.labelW
+        ? Math.round((ctx.labelW - textW) / 2)
+        : el.x
+  const draw = (dx: number) => `${rotate}^FO${baseX + dx},${el.y}^A0N,${fontSize},${w}^FD${text}^FS`
   // Bold: overstrike with a 1-dot horizontal offset so strokes print heavier.
   return el.bold ? `${draw(0)}\n${draw(1)}` : draw(0)
 }
@@ -141,9 +197,16 @@ export function generateZpl(
     lines.push(dowZpl(layout.dowConfig, expiry))
   }
 
+  // Pre-fit the day-of-week font so it can't overlap a right-anchored date.
+  const dateEl = layout.elements.find(e => e.anchorDowEnd)
+  const dowFitSize = dateEl
+    ? computeDowFitSize(layout, resolveText(dateEl, values, now, expiry, sameDayAsTime))
+    : undefined
+  const ctx: RenderCtx = { dowConfig: layout.dowConfig, labelW, sameDayAsTime, dowFitSize }
+
   // User-placed elements
   for (const el of layout.elements) {
-    const fragment = elementZpl(el, values, now, expiry, layout.dowConfig, labelW, sameDayAsTime)
+    const fragment = elementZpl(el, values, now, expiry, ctx)
     if (fragment) lines.push(fragment)
   }
 

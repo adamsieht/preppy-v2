@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 import type { LabelLayout, LabelValues } from '../pages/Preppy/labelTypes'
 import { getLabelSize, DOW_COLORS, DOW_TEXT_COLORS, DOW_ABBR, dayjsDayToMonFirst } from '../pages/Preppy/labelDefs'
-import { resolvePreviewText, resolvePreviewExpiry } from '../pages/Preppy/labelZpl'
+import { resolvePreviewText, resolvePreviewExpiry, computeDowFitSize, estTextWidth, dowStripRightEdge } from '../pages/Preppy/labelZpl'
 
 type LabelTemplate = 'IX' | 'OX' | 'UX'
 
@@ -105,6 +105,11 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
   // Mirror generateZpl: same-day labels show the time unless a dedicated expiry-time
   // element is present (then the date slot keeps the date).
   const sameDayAsTime = !layout.elements.some(e => e.type === 'expiry-time')
+  // Pre-fit the day-of-week font so it can't overlap a right-anchored date.
+  const dateEl = layout.elements.find(e => e.anchorDowEnd)
+  const dowFitSize = dateEl
+    ? computeDowFitSize(layout, resolvePreviewText(dateEl, values, sameDayAsTime))
+    : undefined
   const w      = size.dotsW * PX_PER_DOT
   const h      = size.dotsH * PX_PER_DOT
   const ox     = (offset?.x ?? 0) * PX_PER_DOT
@@ -135,13 +140,18 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
       {layout.elements.map(el => {
         const text = resolvePreviewText(el, values, sameDayAsTime)
         if (!text) return null
-        const fs = el.fontSize * PX_PER_DOT
-        const fw = (el.fontWidth ?? el.fontSize) * PX_PER_DOT
+        // dow-name font may be shrunk to fit; scale width by the same ratio.
+        const fontSizeDot = el.type === 'dow-name' && dowFitSize ? dowFitSize : el.fontSize
+        const fs = fontSizeDot * PX_PER_DOT
+        const fw = (el.fontWidth ?? el.fontSize) * (fontSizeDot / el.fontSize) * PX_PER_DOT
+        // anchorDowEnd: right-align to the DOW strip's right edge (Sunday cell).
         // anchorDowDay: x tracks the boxed (expiry) day's column in the strip.
         // centerX: x centres the element horizontally on the label.
-        const textWdot = text.length * el.fontSize * 0.6
+        const textWdot = estTextWidth(text, fontSizeDot)
         let xDot = el.x
-        if (el.anchorDowDay && layout.dowConfig) {
+        if (el.anchorDowEnd && layout.dowConfig) {
+          xDot = dowStripRightEdge(layout.dowConfig) - textWdot
+        } else if (el.anchorDowDay && layout.dowConfig) {
           const cfg   = layout.dowConfig
           const idx   = dayjsDayToMonFirst(expiry.day())
           const cellX = cfg.x + idx * cfg.cellW

@@ -18,7 +18,7 @@ import PageLayout from '../../components/PageLayout'
 import SmartLabelPreview from '../../components/SmartLabelPreview'
 import Clock from '../../components/Clock'
 import PrinterStatus from '../../components/PrinterStatus'
-import { loadActiveLayout } from './labelDefs'
+import { loadActiveLayout, buildQuickItemLayout } from './labelDefs'
 import { BUILTIN_STATIC_PRESETS, loadStaticPresets, buildStaticLayout } from './staticPresets'
 import type { StaticPreset } from './staticPresets'
 import { generateZpl } from './labelZpl'
@@ -338,7 +338,7 @@ export default function Preppy() {
   }
 
   // ── Print handlers ────────────────────────────────────────────────────────
-  async function handlePrint(durationHrs: number, qty: number, tpl = template, opts?: { fromCalendar?: boolean }) {
+  async function handlePrint(durationHrs: number, qty: number, tpl = template, opts?: { fromCalendar?: boolean; itemName?: string }) {
     const baseSettings = loadDateCalcSettings()
     // Calendar prints target the exact date clicked: disable day-first so the
     // expiry isn't shifted back a day, and always render the date (not a same-day time).
@@ -376,7 +376,9 @@ export default function Preppy() {
     })
 
     try {
-      const zpl = generateZpl(loadActiveLayout(), { template: tpl, durationHrs }, 0, 0, {
+      // Quick items print the item name where the day-of-week sits on a preset.
+      const layout = opts?.itemName ? buildQuickItemLayout(loadActiveLayout()) : loadActiveLayout()
+      const zpl = generateZpl(layout, { template: tpl, durationHrs, itemName: opts?.itemName }, 0, 0, {
         settings: dateCalcSettings,
         forceExpiryDate: opts?.fromCalendar,
       })
@@ -672,6 +674,7 @@ export default function Preppy() {
 
           <QuickItemsPanel
             onPrint={handlePrint}
+            onItemPrint={(hrs, qty, itemName) => handlePrint(hrs, qty, template, { itemName })}
             onPrintBundle={handlePrintBundle}
             onCustomPrint={handleCustomItemPrint}
             template={template}
@@ -709,8 +712,9 @@ export default function Preppy() {
             const hrs = printQtyTarget.kind === 'item'
               ? printQtyTarget.templateHrs[tpl]
               : printQtyTarget.durationHrs
+            const itemName = printQtyTarget.kind === 'item' ? printQtyTarget.label : undefined
             setTemplate(tpl)
-            void handlePrint(hrs, qty, tpl)
+            void handlePrint(hrs, qty, tpl, { itemName })
             setPrintQtyTarget(null)
           }}
           onClose={() => setPrintQtyTarget(null)}

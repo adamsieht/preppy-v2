@@ -89,31 +89,38 @@ const LONGEST_DOW_NAME = 'Wednesday'
 
 /**
  * When a daymark layout right-aligns its expiry date to the DOW strip end, the
- * day-of-week (left) and date (right) can collide for long day names. This
- * returns a font size for the dow-name element that guarantees the longest day
- * name fits to the left of the date — or undefined when no adjustment applies
- * (no DOW strip, or no right-anchored date + dow-name pair).
+ * bottom-left text (day-of-week or item name) can collide with it. This returns
+ * the id of that left element plus a font size that guarantees it clears the
+ * date — or undefined when no adjustment applies (no DOW strip, or no
+ * right-anchored date + left-text pair). The day-of-week is sized uniformly for
+ * the longest day name; an item name is fitted to its actual text.
  */
-export function computeDowFitSize(layout: LabelLayout, dateText: string): number | undefined {
+export interface RowFit { id: string; fontSize: number }
+
+export function computeRowFit(layout: LabelLayout, dateText: string, itemName = ''): RowFit | undefined {
   const cfg = layout.dowConfig
   if (!cfg) return undefined
   const dateEl = layout.elements.find(e => e.anchorDowEnd)
-  const dowEl  = layout.elements.find(e => e.type === 'dow-name')
-  if (!dateEl || !dowEl) return undefined
+  const leftEl = layout.elements.find(e => e.type === 'dow-name' || e.type === 'item-name')
+  if (!dateEl || !leftEl) return undefined
 
+  const sample   = leftEl.type === 'dow-name' ? LONGEST_DOW_NAME : itemName
   const dateLeft = dowEndAlignedX(cfg, dateText, dateEl.fontSize)
-  const budget   = dateLeft - DOW_DATE_GAP - dowEl.x
-  const natural  = estTextWidth(LONGEST_DOW_NAME, dowEl.fontSize)
-  if (budget <= 0 || natural <= budget) return dowEl.fontSize
-  return Math.max(8, Math.floor(dowEl.fontSize * budget / natural))
+  const budget   = dateLeft - DOW_DATE_GAP - leftEl.x
+  const natural  = estTextWidth(sample, leftEl.fontSize)
+  const fontSize = budget <= 0 || natural <= budget
+    ? leftEl.fontSize
+    : Math.max(8, Math.floor(leftEl.fontSize * budget / natural))
+  return { id: leftEl.id, fontSize }
 }
 
 interface RenderCtx {
   dowConfig?: DowStripConfig
   labelW: number
   sameDayAsTime: boolean
-  /** Font size for the dow-name element, pre-fitted to avoid overlapping the date. */
-  dowFitSize?: number
+  /** Element whose font was shrunk to fit the bottom row, and its fitted size. */
+  fitId?: string
+  fitSize?: number
 }
 
 // ── Element ZPL fragment ────────────────────────────────────────────────────
@@ -122,8 +129,8 @@ function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, exp
   if (!text) return ''
   const fw = el.rotation === 90 ? 'R' : el.rotation === 180 ? 'I' : el.rotation === 270 ? 'B' : 'N'
   const rotate = el.rotation !== 0 ? `^FW${fw}` : ''
-  // dow-name font may be shrunk to fit; scale width by the same ratio.
-  const fontSize = el.type === 'dow-name' && ctx.dowFitSize ? ctx.dowFitSize : el.fontSize
+  // The bottom-row left element may be shrunk to fit; scale its width to match.
+  const fontSize = ctx.fitId && el.id === ctx.fitId && ctx.fitSize ? ctx.fitSize : el.fontSize
   const w = Math.round((el.fontWidth ?? el.fontSize) * (fontSize / el.fontSize))
   const textW = estTextWidth(text, fontSize)
   const baseX = el.anchorDowEnd && ctx.dowConfig
@@ -197,12 +204,13 @@ export function generateZpl(
     lines.push(dowZpl(layout.dowConfig, expiry))
   }
 
-  // Pre-fit the day-of-week font so it can't overlap a right-anchored date.
+  // Pre-fit the bottom-left text (day-of-week or item name) so it can't overlap a
+  // right-anchored date.
   const dateEl = layout.elements.find(e => e.anchorDowEnd)
-  const dowFitSize = dateEl
-    ? computeDowFitSize(layout, resolveText(dateEl, values, now, expiry, sameDayAsTime))
+  const fit = dateEl
+    ? computeRowFit(layout, resolveText(dateEl, values, now, expiry, sameDayAsTime), values.itemName ?? '')
     : undefined
-  const ctx: RenderCtx = { dowConfig: layout.dowConfig, labelW, sameDayAsTime, dowFitSize }
+  const ctx: RenderCtx = { dowConfig: layout.dowConfig, labelW, sameDayAsTime, fitId: fit?.id, fitSize: fit?.fontSize }
 
   // User-placed elements
   for (const el of layout.elements) {

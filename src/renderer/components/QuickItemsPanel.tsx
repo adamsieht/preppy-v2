@@ -126,6 +126,7 @@ function BundleCard({ bundle, cardStyle, activeLayout, onPrint, onDelete, onMove
 
 interface PanelProps {
   onPrint:          (hrs: number, qty: number) => void
+  onItemPrint:      (hrs: number, qty: number, itemName: string) => void
   onPrintBundle:    (entries: BundleEntry[], multiplier: number) => void
   onCustomPrint:    (templateHrs: TemplateHrs, label: string) => void
   template:         LabelTemplate
@@ -136,7 +137,7 @@ interface PanelProps {
   isEditing?:       boolean
 }
 
-export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint, template, durationOptions, collapsed, onToggleCollapse, printSignal, isEditing }: PanelProps) {
+export default function QuickItemsPanel({ onPrint, onItemPrint, onPrintBundle, onCustomPrint, template, durationOptions, collapsed, onToggleCollapse, printSignal, isEditing }: PanelProps) {
   const [items,         setItems]         = useState<QuickListEntry[]>(() => loadItems())
   const [userCats,      setUserCats]      = useState<CategoryDef[]>(() => loadUserCats())
   const [hiddenCats,    setHiddenCats]    = useState<string[]>(() => loadStored(HIDDEN_CATS_KEY))
@@ -484,8 +485,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                             <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
                           ) : (
                             <>
-                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
-                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onItemPrint(item.hrs[template], 1, item.name) }} className={classes.gridCardBtn(false)}>×1</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onItemPrint(item.hrs[template], 5, item.name) }} className={classes.gridCardBtn(false)}>×5</button>
                               <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
                             </>
                           )}
@@ -535,8 +536,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                                 <button onClick={() => setDatePromptItem(item)} className={classes.gridCardBtn(true)}>📅 Pick Date</button>
                               ) : (
                                 <>
-                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.gridCardBtn(false)}>×1</button>
-                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.gridCardBtn(false)}>×5</button>
+                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onItemPrint(item.hrs[template], 1, item.name) }} className={classes.gridCardBtn(false)}>×1</button>
+                                  <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onItemPrint(item.hrs[template], 5, item.name) }} className={classes.gridCardBtn(false)}>×5</button>
                                   <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.gridCardBtn(true)}>🖨 ×</button>
                                 </>
                               )}
@@ -569,8 +570,8 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
                             <button onClick={() => setDatePromptItem(item)} className={classes.itemBtn(true)}>📅 Date</button>
                           ) : (
                             <>
-                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onPrint(item.hrs[template], 1) }} className={classes.itemBtn(false)}>×1</button>
-                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onPrint(item.hrs[template], 5) }} className={classes.itemBtn(false)}>×5</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 1, item.id); onItemPrint(item.hrs[template], 1, item.name) }} className={classes.itemBtn(false)}>×1</button>
+                              <button onClick={() => { logActive(item.name, item.category, template, item.hrs[template], 5, item.id); onItemPrint(item.hrs[template], 5, item.name) }} className={classes.itemBtn(false)}>×5</button>
                               <button onClick={() => onCustomPrint(item.hrs, item.name)} className={classes.itemBtn(true)}>🖨 ×</button>
                             </>
                           )}
@@ -867,7 +868,7 @@ export default function QuickItemsPanel({ onPrint, onPrintBundle, onCustomPrint,
         <DatePromptPage
           itemName={datePromptItem.name}
           template={template}
-          onPrint={(hrs, qty) => { logActive(datePromptItem.name, datePromptItem.category, template, hrs, qty); onPrint(hrs, qty) }}
+          onPrint={(hrs, qty) => { logActive(datePromptItem.name, datePromptItem.category, template, hrs, qty); onItemPrint(hrs, qty, datePromptItem.name) }}
           onClose={() => setDatePromptItem(null)}
         />
       )}

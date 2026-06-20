@@ -161,58 +161,38 @@ export function loadActiveLayout(): LabelLayout {
 }
 
 /**
- * Quick-item label layout —
- *   • template (I/O/U)→ under the boxed current day (daymark), along the top
- *   • item name      → centred horizontally + vertically on the card
- *   • day of week    → bottom-left
- *   • expiry date    → bottom-right
- * Inherits the active layout's size + stock so the Daymark day-of-week strip
- * still renders. The date is positioned using an estimated text width (date is
- * a fixed 8 chars); the template id and name are positioned dynamically at
- * render time (anchorDowDay / centerX).
+ * Quick-item label layout — identical to the active preset layout, except the
+ * bottom-left day-of-week is replaced by the item name (kept in the same spot and
+ * auto-fitted at render time so it never overlaps the right-aligned date). The
+ * template id and expiry date are unchanged, so quick items match the presets.
+ * Layouts without a day-of-week (e.g. blank stock) get the item name added at the
+ * bottom-left instead.
  */
 export function buildQuickItemLayout(active: LabelLayout): LabelLayout {
-  const size = getLabelSize(active.sizeKey)
-  const W = size.dotsW
-  const H = size.dotsH
-  const isDaymark = active.stockKey === 'daymark' && !!active.dowConfig
-  const big = size.key === '2x2'
+  const elements: LabelElement[] = active.elements
+    .filter(el => el.type !== 'item-name')   // drop any name already on the source layout
+    .map(el => el.type === 'dow-name'
+      ? { ...el, id: 'qi-name', type: 'item-name' as const, bold: true }
+      : { ...el })
 
-  // Keep the top row clear of the pre-printed Daymark day-of-week strip.
-  const stripBottom = isDaymark && active.dowConfig
-    ? active.dowConfig.numberY + active.dowConfig.numberFontSize
-    : 0
-
-  const nameFs = big ? 40 : 30
-  const idFs   = big ? 34 : 28
-  const dowFs  = big ? 34 : 26
-  const dateFs = big ? 40 : 28
-  const margin = big ? 18 : 12
-  const CW     = 0.6 // approx character width as a fraction of font height
-
-  const topY    = Math.max(margin, stripBottom + (big ? 12 : 8))
-  const bottomY = H - Math.max(dowFs, dateFs) - margin
-  // Centre the name in the band between the template id and the bottom row so
-  // the gap above (to IX) matches the gap below (to the day/date).
-  const nameY   = Math.round((topY + idFs + bottomY - nameFs) / 2)
-  const idX     = Math.round(W - 2 * idFs * CW - margin) // fallback for blank stock
-  const dateX   = Math.round(W - 'MM/DD/YY'.length * dateFs * CW - margin)
+  // Layouts with no day-of-week (e.g. blank stock): add the name at the bottom-left.
+  if (!elements.some(el => el.type === 'item-name')) {
+    const size = getLabelSize(active.sizeKey)
+    const big  = size.key === '2x2'
+    elements.push({
+      id: 'qi-name', type: 'item-name', bold: true, rotation: 0,
+      x: big ? 18 : 12,
+      y: size.dotsH - (big ? 58 : 42),
+      fontSize: big ? 40 : 30, fontWidth: big ? 40 : 30,
+    })
+  }
 
   return {
+    ...active,
     id: `quick-${active.id}`,
     name: 'Quick Item',
     isBuiltin: true,
-    sizeKey: active.sizeKey,
-    stockKey: active.stockKey,
     dowConfig: active.dowConfig ? { ...active.dowConfig } : undefined,
-    invert: active.invert,
-    elements: [
-      { id: 'qi-tpl',  type: 'template-id', x: idX,    y: topY,     fontSize: idFs,   fontWidth: idFs,   rotation: 0, anchorDowDay: true },
-      { id: 'qi-name', type: 'item-name',   x: margin, y: nameY,    fontSize: nameFs, fontWidth: nameFs, rotation: 0, centerX: true, bold: true },
-      { id: 'qi-dow',  type: 'dow-name',    x: margin, y: bottomY,  fontSize: dowFs,  fontWidth: dowFs,  rotation: 0 },
-      // Daymark: right-align to the Sunday cell so it matches the standard layout
-      // (and the dow-name auto-fits). Blank stock falls back to the computed dateX.
-      { id: 'qi-date', type: 'expiry-date', x: dateX,  y: bottomY,  fontSize: dateFs, fontWidth: dateFs, rotation: 0, dateFormat: 'MM/DD/YY', anchorDowEnd: isDaymark },
-    ],
+    elements,
   }
 }

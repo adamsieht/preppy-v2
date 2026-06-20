@@ -11,23 +11,35 @@ describe('labelZpl — DOW / date geometry', () => {
     expect(dowStripRightEdge(cfg)).toBe(cfg.x + 7 * cfg.cellW)
   })
 
-  it('shrinks the day-of-week font so the longest day name never overlaps the date', () => {
+  it('does not shrink the day-of-week on the default layout (it already fits)', () => {
+    const dowEl = daymark2x1.elements.find(e => e.type === 'dow-name')!
+    const fit = computeRowFit(daymark2x1, '06/15/26')!
+    expect(fit.id).toBe(dowEl.id)
+    expect(fit.fontSize).toBe(dowEl.fontSize) // no needless shrink
+  })
+
+  it('keeps even the longest day name clear of the right-aligned date', () => {
     const dowEl  = daymark2x1.elements.find(e => e.type === 'dow-name')!
     const dateEl = daymark2x1.elements.find(e => e.type === 'expiry-date')!
-    const dateText = '06/15/26'
-
-    const fit = computeRowFit(daymark2x1, dateText)!
-    expect(fit.id).toBe(dowEl.id)
-    expect(fit.fontSize).toBeLessThan(dowEl.fontSize) // shrunk from its configured size
-
-    // The right-aligned date's left edge, and the fitted "Wednesday" right edge.
-    const dateLeft = dowStripRightEdge(daymark2x1.dowConfig!) - estTextWidth(dateText, dateEl.fontSize)
+    const fit = computeRowFit(daymark2x1, '06/15/26')!
+    const dateLeft = dowStripRightEdge(daymark2x1.dowConfig!) - estTextWidth('06/15/26', dateEl.fontSize)
     const dowRight = dowEl.x + estTextWidth('Wednesday', fit.fontSize)
     expect(dowRight).toBeLessThanOrEqual(dateLeft)
   })
 
   it('returns undefined when the layout has no DOW strip', () => {
     expect(computeRowFit(blank2x1, '06/15/26')).toBeUndefined()
+  })
+
+  it('right-justifies the date to the DOW strip edge via a ^FB field block', () => {
+    const zpl = generateZpl(
+      daymark2x1,
+      { template: 'IX', durationHrs: 48 },
+      0, 0,
+      { settings: { mode: 'standard', cutoffHour: 24, minuteRounding: 0, eodOnMidnight: false } },
+    )
+    const right = dowStripRightEdge(daymark2x1.dowConfig!)
+    expect(zpl).toContain(`^FB${right},1,0,R`)
   })
 })
 

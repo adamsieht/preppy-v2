@@ -56,10 +56,13 @@ function resolveText(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, ex
 }
 
 // ── Text width / DOW geometry helpers ────────────────────────────────────────
-// Approximate printed width of a string in the scalable ^A0 font. The 0.6 factor
-// is the app-wide estimate used for all centring/alignment math.
+// Approximate printed width of a string in the scalable ^A0 font (CG Triumvirate
+// Condensed), used for centring and overlap math. The font is narrower than a
+// naive square estimate — ~0.5×height per character is close in practice. The
+// right-aligned date doesn't rely on this at all (it uses a ZPL field block).
+export const CHAR_WIDTH_RATIO = 0.5
 export function estTextWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * 0.6
+  return text.length * fontSize * CHAR_WIDTH_RATIO
 }
 
 // Right edge of the DOW strip = right edge of the Sunday cell (Mon..Sun, 7 cells).
@@ -132,14 +135,21 @@ function elementZpl(el: LabelElement, values: LabelValues, now: dayjs.Dayjs, exp
   // The bottom-row left element may be shrunk to fit; scale its width to match.
   const fontSize = ctx.fitId && el.id === ctx.fitId && ctx.fitSize ? ctx.fitSize : el.fontSize
   const w = Math.round((el.fontWidth ?? el.fontSize) * (fontSize / el.fontSize))
+
+  // Right-align to the DOW strip's right edge with a right-justified field block,
+  // so the printer places the text exactly at the edge regardless of font metrics.
+  if (el.anchorDowEnd && ctx.dowConfig) {
+    const right = dowStripRightEdge(ctx.dowConfig)
+    const draw = (dx: number) => `${rotate}^FO${dx},${el.y}^A0N,${fontSize},${w}^FB${right},1,0,R^FD${text}^FS`
+    return el.bold ? `${draw(0)}\n${draw(1)}` : draw(0)
+  }
+
   const textW = estTextWidth(text, fontSize)
-  const baseX = el.anchorDowEnd && ctx.dowConfig
-    ? dowEndAlignedX(ctx.dowConfig, text, fontSize)
-    : el.anchorDowDay && ctx.dowConfig
-      ? dowAnchorX(ctx.dowConfig, expiry, text, fontSize)
-      : el.centerX && ctx.labelW
-        ? Math.round((ctx.labelW - textW) / 2)
-        : el.x
+  const baseX = el.anchorDowDay && ctx.dowConfig
+    ? dowAnchorX(ctx.dowConfig, expiry, text, fontSize)
+    : el.centerX && ctx.labelW
+      ? Math.round((ctx.labelW - textW) / 2)
+      : el.x
   const draw = (dx: number) => `${rotate}^FO${baseX + dx},${el.y}^A0N,${fontSize},${w}^FD${text}^FS`
   // Bold: overstrike with a 1-dot horizontal offset so strokes print heavier.
   return el.bold ? `${draw(0)}\n${draw(1)}` : draw(0)

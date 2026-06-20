@@ -145,13 +145,15 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
         const fontSizeDot = fit && el.id === fit.id ? fit.fontSize : el.fontSize
         const fs = fontSizeDot * PX_PER_DOT
         const fw = (el.fontWidth ?? el.fontSize) * (fontSizeDot / el.fontSize) * PX_PER_DOT
-        // anchorDowEnd: right-align to the DOW strip's right edge (Sunday cell).
+        // anchorDowEnd: right-align the right edge to the DOW strip's right edge
+        //   (Sunday cell) — positioned by right edge so it's exact, like the ^FB print.
         // anchorDowDay: x tracks the boxed (expiry) day's column in the strip.
         // centerX: x centres the element horizontally on the label.
         const textWdot = estTextWidth(text, fontSizeDot)
+        const rightAnchor = !!(el.anchorDowEnd && layout.dowConfig)
         let xDot = el.x
-        if (el.anchorDowEnd && layout.dowConfig) {
-          xDot = dowStripRightEdge(layout.dowConfig) - textWdot
+        if (rightAnchor) {
+          xDot = dowStripRightEdge(layout.dowConfig!)   // element's right edge sits here
         } else if (el.anchorDowDay && layout.dowConfig) {
           const cfg   = layout.dowConfig
           const idx   = dayjsDayToMonFirst(expiry.day())
@@ -163,7 +165,8 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
         const x  = xDot * PX_PER_DOT
         const y  = el.y * PX_PER_DOT
 
-        const rotMap: Record<number, string> = { 0: 'none', 90: 'rotate(90deg)', 180: 'rotate(180deg)', 270: 'rotate(270deg)' }
+        const rotMap: Record<number, string> = { 0: '', 90: 'rotate(90deg)', 180: 'rotate(180deg)', 270: 'rotate(270deg)' }
+        const transform = [rightAnchor ? 'translateX(-100%)' : '', rotMap[el.rotation ?? 0]].filter(Boolean).join(' ') || 'none'
         return (
           <div
             key={el.id}
@@ -175,7 +178,7 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
               fontWeight: el.bold ? 900 : 700,
               color: '#111',
               lineHeight: 1,
-              transform: rotMap[el.rotation ?? 0],
+              transform,
               transformOrigin: 'top left',
               whiteSpace: 'nowrap',
               letterSpacing: `${(fw - fs) * 0.1}px`,

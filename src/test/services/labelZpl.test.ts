@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { estTextWidth, dowStripRightEdge, computeRowFit, generateZpl } from '../../renderer/pages/Preppy/labelZpl'
-import { BUILTIN_LAYOUTS, buildQuickItemLayout } from '../../renderer/pages/Preppy/labelDefs'
+import dayjs from 'dayjs'
+import { estTextWidth, dowStripRightEdge, computeRowFit, computeTimeBar, generateZpl } from '../../renderer/pages/Preppy/labelZpl'
+import { BUILTIN_LAYOUTS, buildQuickItemLayout, dayjsDayToMonFirst } from '../../renderer/pages/Preppy/labelDefs'
 
 const daymark2x1 = BUILTIN_LAYOUTS.find(l => l.id === 'builtin-daymark-2x1')!
 const blank2x1   = BUILTIN_LAYOUTS.find(l => l.id === 'builtin-blank-2x1')!
@@ -72,7 +73,7 @@ describe('buildQuickItemLayout', () => {
     expect(nameRight).toBeLessThanOrEqual(dateLeft)
   })
 
-  it('emits the item name (and no day-of-week) in the generated ZPL', () => {
+  it('emits the item name in the generated ZPL (sanity)', () => {
     const quick = buildQuickItemLayout(daymark2x1)
     const zpl = generateZpl(
       quick,
@@ -81,5 +82,47 @@ describe('buildQuickItemLayout', () => {
       { settings: { mode: 'standard', cutoffHour: 24, minuteRounding: 0, eodOnMidnight: false } },
     )
     expect(zpl).toContain('Diced Tomatoes')
+  })
+})
+
+describe('computeTimeBar', () => {
+  const cfg = daymark2x1.dowConfig!
+  const thu = dayjs('2026-06-25')   // Thursday, idx 3
+  const expiryEndX = cfg.x + dayjsDayToMonFirst(thu.day()) * cfg.cellW  // left edge of Thu cell
+
+  it('returns null for a same-day label', () => {
+    expect(computeTimeBar(daymark2x1, thu, thu)).toBeNull()
+  })
+
+  it('returns null when the layout has no DOW strip', () => {
+    expect(computeTimeBar(blank2x1, dayjs('2026-06-22'), thu)).toBeNull()
+  })
+
+  it('draws a block under the print day and a line stopping before the expiry day', () => {
+    const mon = dayjs('2026-06-22')   // Monday, same week as Thursday
+    const bar = computeTimeBar(daymark2x1, mon, thu)!
+    expect(bar.block).not.toBeNull()
+    // Block centred under Monday's column (idx 0)
+    const monCenter = cfg.x + 0 * cfg.cellW + cfg.cellW / 2
+    expect(Math.abs((bar.block!.x + bar.block!.w / 2) - monCenter)).toBeLessThanOrEqual(1)
+    // Line begins at the block's right edge and ends before the expiry cell
+    expect(bar.line.x).toBe(bar.block!.x + bar.block!.w)
+    expect(bar.line.x + bar.line.w).toBe(expiryEndX)
+  })
+
+  it('draws only a line from the left edge when the print day predates the shown week', () => {
+    const earlier = dayjs('2026-06-15')   // the previous week
+    const bar = computeTimeBar(daymark2x1, earlier, thu)!
+    expect(bar.block).toBeNull()
+    expect(bar.line.x).toBe(0)
+    expect(bar.line.x + bar.line.w).toBe(expiryEndX)
+  })
+
+  it('generateZpl adds bar boxes only when the timeline bar is enabled', () => {
+    const opts = { settings: { mode: 'standard' as const, cutoffHour: 24, minuteRounding: 0 as const, eodOnMidnight: false } }
+    const count = (s: string) => (s.match(/\^GB/g) || []).length
+    const on  = generateZpl(daymark2x1, { template: 'IX', durationHrs: 48 }, 0, 0, { ...opts, timeBar: true })
+    const off = generateZpl(daymark2x1, { template: 'IX', durationHrs: 48 }, 0, 0, { ...opts, timeBar: false })
+    expect(count(on)).toBeGreaterThan(count(off))
   })
 })

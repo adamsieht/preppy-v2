@@ -4,6 +4,15 @@ import { dayjsDayToMonFirst, getLabelSize } from './labelDefs'
 import { loadDateCalcSettings, resolveExpiry } from './labelDateCalc'
 import type { LabelDateCalcSettings } from './labelDateCalc'
 
+// ── Timeline bar setting (global on/off) ─────────────────────────────────────
+export const LABEL_TIMEBAR_KEY = 'preppy-label-timebar'
+export function loadTimeBarEnabled(): boolean {
+  try { return localStorage.getItem(LABEL_TIMEBAR_KEY) === 'true' } catch { return false }
+}
+export function saveTimeBarEnabled(enabled: boolean): void {
+  try { localStorage.setItem(LABEL_TIMEBAR_KEY, enabled ? 'true' : 'false') } catch { /* ignore */ }
+}
+
 // Time format used when a same-day label's expiry-date slot shows the time instead
 // of the (useless, always-today) date. Matches the friendly preview card.
 const SAME_DAY_TIME_FORMAT = 'h:mm A'
@@ -176,6 +185,73 @@ function dowZpl(cfg: DowStripConfig, expiry: dayjs.Dayjs): string {
   return [box, ...numLines].join('\n')
 }
 
+// ── Timeline bar ─────────────────────────────────────────────────────────────
+// A "made → expires" bar under the DOW strip: a solid block under the print day's
+// number, with a thin line running right to (but stopping short of) the expiry
+// day, so it never overlaps the IX/OX/UX code centred there. When the print day
+// is earlier than the displayed week, the line starts at the label's left edge
+// with no block. Hidden for same-day labels (handled by the null return).
+export interface TimeBarRect { x: number; y: number; w: number; h: number }
+export interface TimeBarGeometry { block: TimeBarRect | null; line: TimeBarRect }
+
+// Tunable proportions (fractions of the strip config), so the look can be dialed in.
+const TIMEBAR = {
+  gapBelowNumbers: 0.20,  // × numberFontSize, space under the date numbers
+  lineThickness:   0.28,  // × numberFontSize
+  blockWidth:      0.30,  // × cellW
+  blockHeight:     0.85,  // × cellW
+}
+
+export function computeTimeBar(layout: LabelLayout, now: dayjs.Dayjs, expiry: dayjs.Dayjs): TimeBarGeometry | null {
+  const cfg = layout.dowConfig
+  if (!cfg) return null
+
+  // Only when the item spans into a later calendar day than it was printed.
+  const printDay  = now.startOf('day')
+  const expiryDay = expiry.startOf('day')
+  if (!expiryDay.isAfter(printDay, 'day')) return null
+
+  const expiryIdx   = dayjsDayToMonFirst(expiry.day())
+  const daysFromMon = expiry.day() === 0 ? 6 : expiry.day() - 1
+  const monday      = expiry.subtract(daysFromMon, 'day').startOf('day')
+
+  const lineH = Math.max(4, Math.round(cfg.numberFontSize * TIMEBAR.lineThickness))
+  const topY  = cfg.numberY + cfg.numberFontSize + Math.round(cfg.numberFontSize * TIMEBAR.gapBelowNumbers)
+  // Stop at the left edge of the expiry day's cell — before the centred IX/OX/UX.
+  const lineEndX = cfg.x + expiryIdx * cfg.cellW
+
+  // Print day shown on this week's strip → solid block + line from its right side.
+  if (!printDay.isBefore(monday, 'day')) {
+    const printIdx = dayjsDayToMonFirst(now.day())
+    const blockW   = Math.max(8, Math.round(cfg.cellW * TIMEBAR.blockWidth))
+    const blockH   = Math.round(cfg.cellW * TIMEBAR.blockHeight)
+    const blockX   = Math.round(cfg.x + printIdx * cfg.cellW + (cfg.cellW - blockW) / 2)
+    const lineX    = blockX + blockW
+    return {
+      block: { x: blockX, y: topY, w: blockW, h: blockH },
+      line:  { x: lineX, y: topY, w: Math.max(0, lineEndX - lineX), h: lineH },
+    }
+  }
+
+  // Print day earlier than the displayed week → thin line from the label's left edge.
+  return {
+    block: null,
+    line:  { x: 0, y: topY, w: Math.max(0, lineEndX), h: lineH },
+  }
+}
+
+// Solid filled rectangle: ^GB with border thickness = the smaller side fills it.
+function filledBox(r: TimeBarRect): string {
+  return `^FO${r.x},${r.y}^GB${r.w},${r.h},${Math.min(r.w, r.h)}^FS`
+}
+
+function timeBarZpl(geo: TimeBarGeometry): string {
+  const parts: string[] = []
+  if (geo.block) parts.push(filledBox(geo.block))
+  if (geo.line.w > 0) parts.push(filledBox(geo.line))
+  return parts.join('\n')
+}
+
 // ── Main ZPL generator ──────────────────────────────────────────────────────
 export interface GenerateZplOptions {
   /** Date-calc settings override. Calendar prints pass standard mode to skip the
@@ -184,6 +260,8 @@ export interface GenerateZplOptions {
   /** Force expiry-date elements to always render the date, even same-day. Calendar
    *  prints target an explicit date, so the date (not a time) is what's wanted. */
   forceExpiryDate?: boolean
+  /** Override the global timeline-bar setting (defaults to loadTimeBarEnabled()). */
+  timeBar?: boolean
 }
 
 export function generateZpl(
@@ -212,6 +290,13 @@ export function generateZpl(
   // DOW strip (if daymark label)
   if (layout.stockKey === 'daymark' && layout.dowConfig) {
     lines.push(dowZpl(layout.dowConfig, expiry))
+
+    // Timeline bar (global toggle) — drawn under the strip, before the elements
+    // so the IX/OX/UX code prints on top of anything it shares space with.
+    if (options.timeBar ?? loadTimeBarEnabled()) {
+      const bar = computeTimeBar(layout, now, expiry)
+      if (bar) lines.push(timeBarZpl(bar))
+    }
   }
 
   // Pre-fit the bottom-left text (day-of-week or item name) so it can't overlap a

@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 import type { LabelLayout, LabelValues } from '../pages/Preppy/labelTypes'
 import { getLabelSize, DOW_COLORS, DOW_TEXT_COLORS, DOW_ABBR, dayjsDayToMonFirst } from '../pages/Preppy/labelDefs'
-import { resolvePreviewText, resolvePreviewExpiry, computeRowFit, estTextWidth, dowStripRightEdge } from '../pages/Preppy/labelZpl'
+import { resolvePreviewText, resolvePreviewExpiry, computeRowFit, estTextWidth, dowStripRightEdge, computeTimeBar, loadTimeBarEnabled } from '../pages/Preppy/labelZpl'
 
 type LabelTemplate = 'IX' | 'OX' | 'UX'
 
@@ -138,6 +138,24 @@ function LayoutPreview({ layout, values, offset }: { layout: LabelLayout; values
         {layout.stockKey === 'daymark' && layout.dowConfig && (
           <DowPrinted layout={layout} expiry={expiry} />
         )}
+        {layout.stockKey === 'daymark' && layout.dowConfig && loadTimeBarEnabled() && (() => {
+          const bar = computeTimeBar(layout, dayjs(), expiry)
+          if (!bar) return null
+          const rect = (r: { x: number; y: number; w: number; h: number }) => (
+            <div style={{
+              position: 'absolute',
+              left: r.x * PX_PER_DOT, top: r.y * PX_PER_DOT,
+              width: r.w * PX_PER_DOT, height: r.h * PX_PER_DOT,
+              background: '#111',
+            }} />
+          )
+          return (
+            <>
+              {bar.block && rect(bar.block)}
+              {bar.line.w > 0 && rect(bar.line)}
+            </>
+          )
+        })()}
       {layout.elements.map(el => {
         const text = resolvePreviewText(el, values, sameDayAsTime)
         if (!text) return null

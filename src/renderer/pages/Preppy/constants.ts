@@ -91,7 +91,7 @@ export const LABEL_PREVIEW_STYLE_KEY = 'preppy-label-preview-style'
 export type LabelPreviewStyle = 'friendly' | 'display-zpl' | 'actual'
 
 export type AppTheme    = 'dark' | 'light'
-export type AccentColor = 'green' | 'blue' | 'purple' | 'orange' | 'red' | 'teal' | 'dow'
+export type AccentColor = 'green' | 'blue' | 'purple' | 'orange' | 'red' | 'teal' | 'pink' | 'dow'
 
 export const ACCENT_COLORS: { value: AccentColor; label: string; color: string }[] = [
   { value: 'green',  label: 'Green',  color: '#28a745' },
@@ -100,6 +100,7 @@ export const ACCENT_COLORS: { value: AccentColor; label: string; color: string }
   { value: 'orange', label: 'Orange', color: '#f97316' },
   { value: 'red',    label: 'Red',    color: '#ef4444' },
   { value: 'teal',   label: 'Teal',   color: '#0d9488' },
+  { value: 'pink',   label: 'Pink',   color: '#f472b6' },
 ]
 
 // Daymark DITM day-of-week accent palette (mon-first: Mon=0 … Sun=6).
@@ -122,7 +123,13 @@ export function getDowAccentIdx(): number {
 
 /** Apply the current DOW accent colour directly to html inline styles. */
 export function applyDowAccent(): void {
-  const { base, hover } = DOW_ACCENT_PALETTE[getDowAccentIdx()]
+  const idx = getDowAccentIdx()
+  let { base, hover } = DOW_ACCENT_PALETTE[idx]
+  // Sunday (idx 6) is near-black — swap to mid-grey in dark mode for readability
+  if (idx === 6 && !document.documentElement.classList.contains('theme-light')) {
+    base  = '#888888'
+    hover = '#aaaaaa'
+  }
   document.documentElement.style.setProperty('--c-accent',       base)
   document.documentElement.style.setProperty('--c-accent-hover', hover)
 }

@@ -123,6 +123,19 @@ html.theme-light[data-accent="teal"] {
   --c-accent-subtle2:  #99f6e4;
 }
 
+html[data-accent="pink"] {
+  --c-accent:          #f472b6;
+  --c-accent-hover:    #f9a8d4;
+  --c-accent-dark:     #ec4899;
+  --c-accent-light:    #fce7f3;
+  --c-accent-subtle:   #2d0a1e;
+  --c-accent-subtle2:  #3d1028;
+}
+html.theme-light[data-accent="pink"] {
+  --c-accent-subtle:   #fce7f3;
+  --c-accent-subtle2:  #fbcfe8;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /* ACCENT COLOR OVERRIDES — replace every hardcoded #28a745 / #2ea043 etc.  */
 /* Applies in both dark and light themes.                                    */

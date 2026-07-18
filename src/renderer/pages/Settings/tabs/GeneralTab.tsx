@@ -185,7 +185,6 @@ export default function GeneralTab() {
       const config = await window.electronAPI.getConfig() as Record<string, unknown> & {
         printer?: { device?: string; labelhomeX?: number; labelhomeY?: number }
       }
-      const updateSettings = await window.electronAPI.getUpdateSettings()
       const backup = {
         _version: CONFIG_BACKUP_VERSION,
         _exported: new Date().toISOString(),
@@ -198,10 +197,6 @@ export default function GeneralTab() {
         printerDevice:  config.printer?.device ?? null,
         labelHomeX:     config.printer?.labelhomeX ?? null,
         labelHomeY:     config.printer?.labelhomeY ?? null,
-        updateSettings: {
-          repoOwner: updateSettings.repoOwner,
-          repoName:  updateSettings.repoName,
-        },
       }
       const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
       const url  = URL.createObjectURL(blob)
@@ -244,16 +239,8 @@ export default function GeneralTab() {
         if (typeof data.labelHomeX === 'number' && typeof data.labelHomeY === 'number') {
           await window.electronAPI.setLabelHome(data.labelHomeX, data.labelHomeY)
         }
-        if (data.updateSettings && typeof data.updateSettings === 'object') {
-          const us = data.updateSettings as { repoOwner?: string; repoName?: string }
-          if (us.repoOwner || us.repoName) {
-            await window.electronAPI.saveUpdateSettings({
-              repoOwner: us.repoOwner ?? '',
-              repoName:  us.repoName  ?? '',
-              token:     '',
-            })
-          }
-        }
+        // Older backups may contain an `updateSettings` block — updates now come
+        // from the fixed public GitHub releases feed, so it's ignored.
 
         setBackupMsg({ ok: true, text: 'Config imported — reloading…' })
         setTimeout(() => window.location.reload(), 800)

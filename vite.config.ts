@@ -17,7 +17,9 @@ export default defineConfig({
           build: {
             outDir: 'dist/main',
             rollupOptions: {
-              external: ['electron', 'better-sqlite3', 'koffi'],
+              // electron-updater is CJS with dynamic requires — must stay
+              // external and be loaded from node_modules at runtime.
+              external: ['electron', 'better-sqlite3', 'koffi', 'electron-updater'],
             },
           },
         },

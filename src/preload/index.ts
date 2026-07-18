@@ -4,11 +4,12 @@ import type { PrintArgs, LabelTemplate, PreviewResult } from '../main/services/p
 import type { Sensor, SensorLog, PrintJob, WifiCredentials, DurationCount } from '../main/services/db.service'
 import type { UsbPrinterDevice } from '../main/services/usb-detection.service'
 import type { WifiNetwork } from '../main/services/wifi.service'
-import type { UpdateSettings, UpdateCheckResult } from '../main/services/updater.service'
+import type { UpdaterState } from '../main/services/updater.service'
+import type { SetupState, KioskSetupOptions, KioskSetupResult } from '../main/services/setup.service'
 
 export interface ElectronAPI {
   print: (args: { template: LabelTemplate; durationHrs: number; qty: number; expiryIso?: string }) => Promise<{ success: boolean; error?: string }>
-  printZpl: (args: { zpl: string; qty: number }) => Promise<{ success: boolean; error?: string }>
+  printZpl: (args: { zpl: string; qty: number }) => Promise<{ success: boolean; error?: string; simulated?: boolean; simulatedPath?: string }>
   previewPrint: (args: { template: LabelTemplate; durationHrs: number }) => Promise<PreviewResult>
   getPrintHistory: (limit?: number, offset?: number) => Promise<PrintJob[]>
   listSensors: () => Promise<Sensor[]>
@@ -32,12 +33,14 @@ export interface ElectronAPI {
   openSystemTimeSettings: () => Promise<{ success: boolean; error?: string }>
   enableNtp: () => Promise<{ success: boolean; error?: string }>
   getPlatform: () => string
-  checkForUpdate: () => Promise<{ success: boolean; result?: UpdateCheckResult; error?: string }>
-  downloadUpdate: (url: string) => Promise<{ success: boolean; error?: string }>
-  onUpdateProgress: (cb: (data: { downloaded: number; total: number }) => void) => () => void
-  applyUpdate: () => Promise<{ success: boolean; error?: string }>
-  getUpdateSettings: () => Promise<UpdateSettings>
-  saveUpdateSettings: (s: UpdateSettings) => Promise<{ success: boolean }>
+  checkForUpdate: () => Promise<UpdaterState>
+  getUpdateState: () => Promise<UpdaterState>
+  onUpdateState: (cb: (state: UpdaterState) => void) => () => void
+  installUpdate: () => Promise<{ success: boolean; error?: string }>
+  getSetupState: () => Promise<SetupState>
+  runKioskSetup: (opts: KioskSetupOptions) => Promise<KioskSetupResult>
+  completeSetup: () => Promise<{ success: boolean }>
+  resetSetup: () => Promise<{ success: boolean }>
   getAppVersion: () => Promise<string>
   quitApp: () => Promise<void>
   getKioskMode: () => Promise<boolean>
@@ -97,15 +100,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   enableNtp:             ()            => ipcRenderer.invoke(IPC.SYSTEM_ENABLE_NTP),
   getPlatform:           ()            => process.platform,
   checkForUpdate: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
-  downloadUpdate: (url: string) => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD, { url }),
-  onUpdateProgress: (cb: (data: { downloaded: number; total: number }) => void) => {
-    const handler = (_: Electron.IpcRendererEvent, data: { downloaded: number; total: number }) => cb(data)
-    ipcRenderer.on(IPC.UPDATE_PROGRESS, handler)
-    return () => ipcRenderer.removeListener(IPC.UPDATE_PROGRESS, handler)
+  getUpdateState: () => ipcRenderer.invoke(IPC.UPDATE_GET_STATE),
+  onUpdateState: (cb: (state: UpdaterState) => void) => {
+    const handler = (_: Electron.IpcRendererEvent, state: UpdaterState) => cb(state)
+    ipcRenderer.on(IPC.UPDATE_STATE, handler)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATE, handler)
   },
-  applyUpdate: () => ipcRenderer.invoke(IPC.UPDATE_APPLY),
-  getUpdateSettings: () => ipcRenderer.invoke(IPC.UPDATE_GET_SETTINGS),
-  saveUpdateSettings: (s: UpdateSettings) => ipcRenderer.invoke(IPC.UPDATE_SAVE_SETTINGS, s),
+  installUpdate: () => ipcRenderer.invoke(IPC.UPDATE_INSTALL),
+  getSetupState: () => ipcRenderer.invoke(IPC.SETUP_GET_STATE),
+  runKioskSetup: (opts: KioskSetupOptions) => ipcRenderer.invoke(IPC.SETUP_RUN, opts),
+  completeSetup: () => ipcRenderer.invoke(IPC.SETUP_COMPLETE),
+  resetSetup: () => ipcRenderer.invoke(IPC.SETUP_RESET),
   getAppVersion: () => ipcRenderer.invoke(IPC.APP_VERSION),
   quitApp:       () => ipcRenderer.invoke(IPC.APP_QUIT),
   getKioskMode:  () => ipcRenderer.invoke(IPC.APP_GET_KIOSK),

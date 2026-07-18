@@ -24,10 +24,10 @@ Unified settings hub with tabs for:
 - **Labels** — categories, custom presets, date calculation behavior
 - **Network** — WiFi scanning and credential management
 - **Date & Time** — NTP sync and manual time set
-- **Updates** — check for, download, and install app updates
+- **Updates** — automatic update status, check now, restart & update now
 
-### In-App Updates
-Check for new releases from GitHub, download in the background with a live progress bar, and install on next quit. The app swaps itself out automatically — no reinstall or USB drive needed. Update source is configurable for private repositories.
+### Automatic Updates
+New releases are detected, downloaded in the background, and installed silently on the next app restart (via `electron-updater` + GitHub Releases). Settings → Updates shows live status with a progress bar and an immediate "Restart & Update Now" option.
 
 ---
 
@@ -112,12 +112,13 @@ All renderer↔main communication goes through the typed bridge in `src/preload/
 | `wifi:get` | Return last saved SSID |
 | `system:set-time` | Set system clock |
 | `system:enable-ntp` | Enable/disable NTP sync |
-| `update:check` | Query GitHub Releases for a newer version |
-| `update:download` | Stream download of the update file |
-| `update:progress` | Push — download progress events |
-| `update:apply` | Write swap script and quit to apply update |
-| `update:get-settings` | Return saved update source settings |
-| `update:save-settings` | Persist update source settings |
+| `update:check` | Trigger an update check (auto-download follows) |
+| `update:get-state` | Return the full updater state snapshot |
+| `update:state` | Push — updater state on every transition |
+| `update:install` | Quit and install the downloaded update now |
+| `setup:get-state` | Should the first-run setup wizard be shown? |
+| `setup:run` | Run the elevated kiosk-hardening script |
+| `setup:complete` / `setup:reset` | Mark wizard done / show it again |
 | `app:version` | Return the running app version |
 | `debug:info` | Return system info, hardware checks, DB stats |
 | `debug:send-zpl` | Send raw ZPL string directly to printer |
@@ -170,51 +171,13 @@ Three templates ship by default: **IX** (In Use), **OX** (Opened/Prepped), **UX*
 
 ### Windows Tablets
 
-#### Option A — Graphical wizard (recommended for end users)
+**Step 1 — Install.** Download `Preppy-Setup-<version>.exe` from the [latest release](https://github.com/adamsieht/preppy-v2/releases/latest) and double-click it. It's a one-click per-user installer (no admin prompt) that installs Preppy, creates Start Menu/desktop shortcuts, and launches the app when done.
 
-Download `Install Preppy.bat` and `install-wizard.ps1` from the [latest release](https://github.com/adamsieht/preppy-v2/releases/latest), place them in the same folder, and double-click **`Install Preppy.bat`**. It handles UAC elevation automatically, shows a step-by-step wizard to collect options (auto-login, update policy, GitHub token), downloads Preppy, hardens Windows, and registers the boot autostart — no terminal access required.
+**Step 2 — First-run setup wizard.** On first launch Preppy shows an in-app setup wizard for kiosk tablets. It configures Windows Update to never auto-restart (or disables updates), disables sleep/lock screen/screensaver, optionally sets up auto-login, registers Preppy to start at login, and installs the printer driver — all through a single UAC prompt. Skippable on non-kiosk machines, and re-runnable any time from **Settings → Updates → Re-run Setup Wizard**.
 
-#### Option B — Command line
+**Step 3 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver, and selects it. No Zebra drivers needed, no manual configuration.
 
-Run from an **Administrator** PowerShell session. Note: if you see "running scripts is disabled on this system", use `powershell -ExecutionPolicy Bypass -File ...` rather than running the `.ps1` directly.
-
-**Step 1 — Install Preppy** (OS hardening + download + autostart in one command):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
-```
-
-Common options:
-
-```powershell
-# Disable automatic Windows Update downloads (recommended if updates have caused printer issues):
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -DisableUpdates
-
-# Auto-login so the tablet boots straight into Preppy without a password prompt:
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 `
-    -AutoLogin -AutoLoginUser "Kiosk" -AutoLoginPassword "yourpassword"
-
-# Private GitHub repository:
-powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1 -GitHubToken "ghp_..."
-```
-
----
-
-**After either method:** Preppy starts automatically in fullscreen kiosk mode after the next login.
-
-**Step 2 — Connect the Zebra printer and open Preppy → Settings → Printer.** The app auto-detects the printer, creates a "Zebra ZPL" print queue using Windows' built-in Generic Text Only driver, and selects it. No Zebra drivers needed, no manual configuration.
-
-> **Re-applying OS hardening** (e.g. after a Windows feature update resets policies) without reinstalling Preppy:
-> ```powershell
-> powershell -ExecutionPolicy Bypass -File scripts\configure-windows-kiosk.ps1
-> ```
-
-**To uninstall:**
-
-```powershell
-Unregister-ScheduledTask -TaskName 'Preppy' -Confirm:$false
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Preppy"
-```
+**To uninstall:** use *Add or remove programs* → Preppy (or `%LOCALAPPDATA%\Programs\Preppy\Uninstall Preppy.exe`).
 
 ---
 
@@ -247,9 +210,9 @@ rm -rf ~/.local/share/preppy
 
 ---
 
-### In-App Updates
+### Auto-Updates
 
-Once installed, open **Settings → Updates** to check for new releases, download, and apply them. The app swaps itself out on next quit — no reinstall needed.
+Updates are fully automatic (powered by `electron-updater`): the app checks GitHub Releases on launch and every 4 hours, downloads new versions in the background, and installs them silently the next time the app quits or restarts. **Settings → Updates** shows the current status and offers *Check Now* and *Restart & Update Now*. Works on Windows (NSIS) and Linux (AppImage).
 
 ---
 
@@ -287,7 +250,7 @@ npm run test:coverage # with coverage report
 
 ```bash
 npm run build                 # TypeScript compile + Vite bundle only
-npm run package:win           # Windows portable .exe  → release/
+npm run package:win           # Windows NSIS installer → release/
 npm run package:linux         # Linux AppImage x64     → release/
 npm run package:linux:arm64   # Linux AppImage arm64   → release/
 ```

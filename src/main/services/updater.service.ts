@@ -1,351 +1,197 @@
-import https from 'https'
-import http from 'http'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { spawn } from 'child_process'
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
+import { autoUpdater } from 'electron-updater'
+import type { UpdateInfo, ProgressInfo } from 'electron-updater'
+import { IPC } from '../ipc/channels'
+import { logInfo, logWarn, logError } from '../logger'
 
-export interface UpdateSettings {
-  repoOwner: string
-  repoName: string
-  token: string
+export type UpdateStatus =
+  | 'idle'          // no check has run yet
+  | 'checking'
+  | 'up-to-date'
+  | 'available'     // found, download starting (autoDownload is on)
+  | 'downloading'
+  | 'downloaded'    // will install on quit; can also install now
+  | 'error'
+
+export interface UpdateProgress {
+  percent: number
+  transferredBytes: number
+  totalBytes: number
+  bytesPerSecond: number
 }
 
-export interface UpdateCheckResult {
-  hasUpdate: boolean
+export interface UpdaterState {
+  status: UpdateStatus
   currentVersion: string
-  latestVersion: string
-  releaseNotes: string
-  publishedAt: string
-  downloadUrl: string
-  fileSize: number
+  latestVersion: string | null
+  releaseNotes: string | null
+  releaseDate: string | null
+  progress: UpdateProgress | null
+  error: string | null
+  /** False on platforms/builds where self-update can't work (dev builds, non-AppImage Linux). */
+  supported: boolean
 }
 
-const SETTINGS_FILE = 'update-settings.json'
+const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000 // every 4 hours
+const FIRST_CHECK_DELAY_MS = 15 * 1000       // let startup settle first
 
-const DEFAULTS: UpdateSettings = {
-  repoOwner: 'adamsieht',
-  repoName: 'preppy-v2',
-  token: '',
+function updatesSupported(): boolean {
+  if (!app.isPackaged) return false
+  if (process.platform === 'win32') return true
+  if (process.platform === 'linux') return Boolean(process.env.APPIMAGE)
+  return false
 }
 
-export function loadUpdateSettings(): UpdateSettings {
-  try {
-    const filePath = path.join(app.getPath('userData'), SETTINGS_FILE)
-    const raw = fs.readFileSync(filePath, 'utf-8')
-    const parsed = JSON.parse(raw)
-    return {
-      repoOwner: typeof parsed.repoOwner === 'string' ? parsed.repoOwner : DEFAULTS.repoOwner,
-      repoName: typeof parsed.repoName === 'string' ? parsed.repoName : DEFAULTS.repoName,
-      token: typeof parsed.token === 'string' ? parsed.token : DEFAULTS.token,
+const state: UpdaterState = {
+  status: 'idle',
+  currentVersion: app.getVersion(),
+  latestVersion: null,
+  releaseNotes: null,
+  releaseDate: null,
+  progress: null,
+  error: null,
+  supported: updatesSupported(),
+}
+
+export function getUpdaterState(): UpdaterState {
+  return { ...state }
+}
+
+function broadcast(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.webContents.isDestroyed()) {
+      win.webContents.send(IPC.UPDATE_STATE, getUpdaterState())
     }
-  } catch {
-    return { ...DEFAULTS }
   }
 }
 
-export function saveUpdateSettings(s: UpdateSettings): void {
-  const filePath = path.join(app.getPath('userData'), SETTINGS_FILE)
-  fs.writeFileSync(filePath, JSON.stringify(s, null, 2), 'utf-8')
+function setState(patch: Partial<UpdaterState>): void {
+  Object.assign(state, patch)
+  broadcast()
 }
 
-function compareVersions(a: string, b: string): number {
-  const partsA = a.replace(/^v/, '').split('.').map(Number)
-  const partsB = b.replace(/^v/, '').split('.').map(Number)
-  const len = Math.max(partsA.length, partsB.length)
-  for (let i = 0; i < len; i++) {
-    const numA = partsA[i] ?? 0
-    const numB = partsB[i] ?? 0
-    if (numA > numB) return 1
-    if (numA < numB) return -1
+// GitHub releases return notes as a string; other providers may return an array.
+function notesToString(notes: UpdateInfo['releaseNotes']): string | null {
+  if (!notes) return null
+  if (typeof notes === 'string') return notes
+  return notes.map(n => n.note ?? '').filter(Boolean).join('\n\n') || null
+}
+
+let initialized = false
+let checkTimer: NodeJS.Timeout | null = null
+
+/**
+ * Wire up electron-updater: auto-check on launch and every few hours,
+ * auto-download in the background, and install silently on quit. The renderer
+ * gets pushed the full state on every transition (IPC.UPDATE_STATE).
+ */
+export function initAutoUpdater(): void {
+  if (initialized || !state.supported) {
+    if (!state.supported) logInfo('Auto-update not supported in this build/platform — skipping updater init')
+    return
   }
-  return 0
-}
+  initialized = true
 
-function httpsGet(url: string, headers: Record<string, string>): Promise<{ statusCode: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const makeRequest = (reqUrl: string, reqHeaders: Record<string, string>, redirectCount: number) => {
-      if (redirectCount > 10) {
-        reject(new Error('Too many redirects'))
-        return
-      }
-      const parsed = new URL(reqUrl)
-      const mod = parsed.protocol === 'https:' ? https : http
-      const options = {
-        hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: 'GET',
-        headers: reqHeaders,
-      }
-      const req = (mod as typeof https).request(options, (res) => {
-        const code = res.statusCode ?? 0
-        if (code >= 300 && code < 400 && res.headers.location) {
-          makeRequest(res.headers.location, reqHeaders, redirectCount + 1)
-          return
-        }
-        let body = ''
-        res.on('data', (chunk: Buffer) => { body += chunk.toString() })
-        res.on('end', () => resolve({ statusCode: code, body }))
-      })
-      req.on('error', reject)
-      req.end()
-    }
-    makeRequest(url, headers, 0)
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.logger = {
+    info:  (...a: unknown[]) => logInfo('[updater]', ...a),
+    warn:  (...a: unknown[]) => logWarn('[updater]', ...a),
+    error: (...a: unknown[]) => logError('[updater]', ...a),
+    debug: (...a: unknown[]) => logInfo('[updater]', ...a),
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    setState({ status: 'checking', error: null })
   })
-}
 
-export async function checkForUpdate(settings: UpdateSettings): Promise<UpdateCheckResult> {
-  const currentVersion = app.getVersion()
-  const url = `https://api.github.com/repos/${settings.repoOwner}/${settings.repoName}/releases/latest`
-
-  const headers: Record<string, string> = {
-    'User-Agent': 'PrepyApp/updater',
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-  }
-  if (settings.token) {
-    headers['Authorization'] = `Bearer ${settings.token}`
-  }
-
-  const { statusCode, body } = await httpsGet(url, headers)
-
-  if (statusCode === 401) throw new Error('Unauthorized — check your GitHub token')
-  if (statusCode === 403) throw new Error('Rate limited or forbidden by GitHub API')
-  if (statusCode === 404) throw new Error('Repository not found')
-  if (statusCode !== 200) throw new Error(`GitHub API returned status ${statusCode}`)
-
-  const data = JSON.parse(body)
-  const latestVersion = (data.tag_name as string).replace(/^v/, '')
-  const releaseNotes: string = data.body ?? ''
-  const publishedAt: string = data.published_at ?? ''
-
-  const assets: Array<{ name: string; browser_download_url: string; size: number }> = data.assets ?? []
-  const exeAsset = findPlatformAsset(assets)
-
-  const downloadUrl = exeAsset?.browser_download_url ?? ''
-  const fileSize = exeAsset?.size ?? 0
-
-  const hasUpdate = compareVersions(latestVersion, currentVersion) > 0
-
-  return {
-    hasUpdate,
-    currentVersion,
-    latestVersion,
-    releaseNotes,
-    publishedAt,
-    downloadUrl,
-    fileSize,
-  }
-}
-
-function findPlatformAsset(
-  assets: Array<{ name: string; browser_download_url: string; size: number }>,
-) {
-  if (process.platform === 'win32') {
-    // Only the portable build artifact is a valid update target. A release can
-    // carry other .exe files (e.g. electron-builder's elevate.exe helper, or the
-    // raw win-unpacked Preppy.exe), so match the artifact name explicitly and
-    // never fall back to an elevate helper.
-    const exes = assets.filter(
-      a => a.name.toLowerCase().endsWith('.exe') && !a.name.toLowerCase().includes('elevate'),
-    )
-    return (
-      exes.find(a => a.name === 'Preppy-portable.exe') ??
-      exes.find(a => a.name.toLowerCase().includes('portable')) ??
-      exes[0]
-    )
-  }
-  if (process.platform === 'linux') {
-    const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
-    return (
-      assets.find(a => a.name.endsWith('.AppImage') && a.name.includes(arch)) ??
-      assets.find(a => a.name.endsWith('.AppImage'))
-    )
-  }
-  return undefined
-}
-
-export function getUpdateFilePath(): string {
-  let dir: string
-  if (app.isPackaged) {
-    if (process.platform === 'linux' && process.env.APPIMAGE) {
-      dir = path.dirname(process.env.APPIMAGE)
-    } else if (process.platform === 'win32') {
-      // For the portable target, process.execPath is the temp-extracted copy;
-      // place the update next to the real .exe the user launched.
-      dir = path.dirname(windowsTargetExe())
-    } else {
-      dir = path.dirname(process.execPath)
-    }
-  } else {
-    dir = app.getPath('temp')
-  }
-  const name = process.platform === 'win32'
-    ? 'Preppy-portable-update.exe'
-    : 'Preppy-update.AppImage'
-  return path.join(dir, name)
-}
-
-export function hasDownloadedUpdate(): boolean {
-  return fs.existsSync(getUpdateFilePath())
-}
-
-export function downloadUpdate(
-  url: string,
-  token: string,
-  onProgress: (downloaded: number, total: number) => void,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const destPath = getUpdateFilePath()
-
-    const headers: Record<string, string> = {
-      'User-Agent': 'PrepyApp/updater',
-    }
-
-    const makeRequest = (reqUrl: string, reqHeaders: Record<string, string>, redirectCount: number) => {
-      if (redirectCount > 10) {
-        reject(new Error('Too many redirects'))
-        return
-      }
-
-      const parsed = new URL(reqUrl)
-      const mod = parsed.protocol === 'https:' ? https : http
-      const options = {
-        hostname: parsed.hostname,
-        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-        path: parsed.pathname + parsed.search,
-        method: 'GET',
-        headers: reqHeaders,
-      }
-
-      const req = (mod as typeof https).request(options, (res) => {
-        const code = res.statusCode ?? 0
-
-        if (code >= 300 && code < 400 && res.headers.location) {
-          const nextHeaders: Record<string, string> = { 'User-Agent': 'PrepyApp/updater' }
-          makeRequest(res.headers.location, nextHeaders, redirectCount + 1)
-          return
-        }
-
-        if (code !== 200) {
-          reject(new Error(`Download failed with status ${code}`))
-          return
-        }
-
-        const total = parseInt(res.headers['content-length'] ?? '0', 10)
-        let downloaded = 0
-        const out = fs.createWriteStream(destPath)
-
-        res.on('data', (chunk: Buffer) => {
-          downloaded += chunk.length
-          out.write(chunk)
-          onProgress(downloaded, total)
-        })
-
-        res.on('end', () => {
-          out.end()
-          resolve(destPath)
-        })
-
-        res.on('error', (err: Error) => {
-          out.destroy()
-          reject(err)
-        })
-      })
-
-      req.on('error', reject)
-      req.end()
-    }
-
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-
-    makeRequest(url, headers, 0)
+  autoUpdater.on('update-available', (info: UpdateInfo) => {
+    logInfo(`Update available: v${info.version} (current v${state.currentVersion})`)
+    setState({
+      status: 'available',
+      latestVersion: info.version,
+      releaseNotes: notesToString(info.releaseNotes),
+      releaseDate: info.releaseDate ?? null,
+      error: null,
+    })
   })
+
+  autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+    setState({
+      status: 'up-to-date',
+      latestVersion: info.version,
+      releaseNotes: null,
+      releaseDate: info.releaseDate ?? null,
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('download-progress', (p: ProgressInfo) => {
+    setState({
+      status: 'downloading',
+      progress: {
+        percent: p.percent,
+        transferredBytes: p.transferred,
+        totalBytes: p.total,
+        bytesPerSecond: p.bytesPerSecond,
+      },
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+    logInfo(`Update downloaded: v${info.version} — will install on quit`)
+    setState({
+      status: 'downloaded',
+      latestVersion: info.version,
+      releaseNotes: notesToString(info.releaseNotes),
+      releaseDate: info.releaseDate ?? null,
+      progress: null,
+      error: null,
+    })
+  })
+
+  autoUpdater.on('error', (err: Error) => {
+    logError('Auto-update error:', err)
+    setState({ status: 'error', error: err.message, progress: null })
+  })
+
+  setTimeout(() => { void checkForUpdates() }, FIRST_CHECK_DELAY_MS)
+  checkTimer = setInterval(() => { void checkForUpdates() }, CHECK_INTERVAL_MS)
 }
 
-export function applyUpdate(): void {
-  if (!app.isPackaged) throw new Error('applyUpdate is only available in packaged builds')
-  if (process.platform === 'win32') return applyUpdateWindows()
-  if (process.platform === 'linux')  return applyUpdateLinux()
-  throw new Error(`Auto-update is not supported on ${process.platform}`)
-}
-
-// The portable target runs from a temp-extracted copy (process.execPath);
-// PORTABLE_EXECUTABLE_FILE is the actual .exe the user double-clicked, which is
-// what we must replace for the update to persist.
-function windowsTargetExe(): string {
-  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath
-}
-
-function applyUpdateWindows(): void {
-  const currentExe = windowsTargetExe()
-  const updateExe  = getUpdateFilePath()
-  const psPath     = path.join(os.tmpdir(), '_preppy_update.ps1')
-  const logPath    = path.join(os.tmpdir(), 'preppy-update.log')
-  const q = (s: string) => s.replace(/'/g, "''")
-
-  // PowerShell is more reliable than a .bat here: it waits for the running exe to
-  // release its lock (the portable launcher takes a moment to exit), retries the
-  // replace, logs each step to %TEMP%\preppy-update.log, then relaunches.
-  const ps = `
-$ErrorActionPreference = 'Continue'
-$log = '${q(logPath)}'
-$src = '${q(updateExe)}'
-$dst = '${q(currentExe)}'
-function Log($m) { "$(Get-Date -Format o)  $m" | Out-File -FilePath $log -Append -Encoding utf8 }
-Log "update start  src=$src  dst=$dst"
-if (-not (Test-Path -LiteralPath $src)) { Log "ERROR: downloaded update not found"; exit 1 }
-$moved = $false
-for ($i = 0; $i -lt 60; $i++) {
-  try {
-    Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-    $moved = $true
-    Log "replaced target after $i retries"
-    break
-  } catch {
-    Start-Sleep -Milliseconds 500
+export function stopAutoUpdater(): void {
+  if (checkTimer) {
+    clearInterval(checkTimer)
+    checkTimer = null
   }
 }
-if (-not $moved) { Log "ERROR: could not replace $dst (still locked after 30s)" }
-try {
-  Start-Process -FilePath $dst -WorkingDirectory (Split-Path -Parent $dst)
-  Log "relaunched $dst"
-} catch {
-  Log "ERROR relaunching: $_"
+
+/** Trigger a check (manual or scheduled). Errors land in state, not thrown. */
+export async function checkForUpdates(): Promise<UpdaterState> {
+  if (!state.supported) {
+    setState({ status: 'error', error: 'Updates are only available in packaged builds.' })
+    return getUpdaterState()
+  }
+  // Don't restart a check while one is downloading — it would cancel progress.
+  if (state.status === 'checking' || state.status === 'downloading') return getUpdaterState()
+  try {
+    await autoUpdater.checkForUpdates()
+  } catch (err) {
+    // The 'error' event handler has already recorded this; guard for early failures.
+    if (state.status !== 'error') {
+      setState({ status: 'error', error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  return getUpdaterState()
 }
-Remove-Item -LiteralPath '${q(psPath)}' -Force -ErrorAction SilentlyContinue
-`.trim()
 
-  fs.writeFileSync(psPath, ps, 'utf-8')
-  spawn('powershell.exe', [
-    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', psPath,
-  ], { detached: true, windowsHide: true, stdio: 'ignore' }).unref()
-  app.quit()
-}
-
-function applyUpdateLinux(): void {
-  const appImage = process.env.APPIMAGE
-  if (!appImage) throw new Error('Not running as AppImage — cannot auto-update')
-
-  const updatePath = getUpdateFilePath()
-  const scriptPath = path.join(path.dirname(appImage), '_preppy_update.sh')
-  const extraArgs  = process.argv.filter(a => a.startsWith('--')).join(' ')
-
-  const script = [
-    '#!/bin/bash',
-    'sleep 2',
-    `mv -f "${updatePath}" "${appImage}"`,
-    `chmod +x "${appImage}"`,
-    `"${appImage}"${extraArgs ? ' ' + extraArgs : ''} &`,
-    'rm -f "$0"',
-  ].join('\n')
-
-  fs.writeFileSync(scriptPath, script, 'utf-8')
-  fs.chmodSync(scriptPath, '755')
-  spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' }).unref()
-  app.quit()
+/** Quit and install the downloaded update now (silent install, relaunch after). */
+export function installUpdateNow(): void {
+  if (state.status !== 'downloaded') {
+    throw new Error('No update has been downloaded yet.')
+  }
+  logInfo('Installing update now (quitAndInstall)')
+  // isSilent=true: no installer UI; isForceRunAfter=true: relaunch when done.
+  autoUpdater.quitAndInstall(true, true)
 }

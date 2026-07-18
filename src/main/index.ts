@@ -14,9 +14,11 @@ import { registerDbHandlers } from './ipc/handlers/db.handler'
 import { registerDebugHandlers } from './ipc/handlers/debug.handler'
 import { registerSystemHandlers } from './ipc/handlers/system.handler'
 import { registerUpdaterHandlers } from './ipc/handlers/updater.handler'
+import { registerSetupHandlers } from './ipc/handlers/setup.handler'
 import { start as startSensorPolling, stop as stopSensorPolling } from './services/sensor.service'
 import { getConfig } from './services/config.service'
-import { ensurePrinterSetupOnLaunch, ensureStartMenuShortcut } from './services/setup.service'
+import { ensurePrinterSetupOnLaunch } from './services/setup.service'
+import { initAutoUpdater, stopAutoUpdater } from './services/updater.service'
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -67,6 +69,7 @@ app.whenReady().then(() => {
   registerDebugHandlers()
   registerSystemHandlers()
   registerUpdaterHandlers()
+  registerSetupHandlers()
 
   logInfo('IPC handlers registered')
 
@@ -75,8 +78,9 @@ app.whenReady().then(() => {
 
   // Ensure the printer driver + queue exist (packaged Windows only — no-op elsewhere)
   void ensurePrinterSetupOnLaunch()
-  // Add a Start Menu shortcut to the portable exe (packaged Windows only)
-  ensureStartMenuShortcut()
+  // Auto-update: check on launch + every few hours, download in the background,
+  // install silently on quit (no-op in dev builds / unsupported platforms)
+  initAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -91,6 +95,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopSensorPolling()
+  stopAutoUpdater()
 })
 
 process.on('uncaughtException', (err) => {

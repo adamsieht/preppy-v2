@@ -5,7 +5,7 @@ import { configureStore } from '@reduxjs/toolkit'
 import devSettingsReducer, { setVerboseErrors } from '../../renderer/store/slices/devSettings.slice'
 import { useErrorMsg } from '../../renderer/hooks/useErrorMsg'
 
-function makeStore(verboseErrors = false) {
+function makeStore(_verboseErrors = false) {
   return configureStore({ reducer: { devSettings: devSettingsReducer } })
 }
 

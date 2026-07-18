@@ -70,7 +70,7 @@ const classes = {
   tdMuted:      'border-b border-[#dee2e6] px-3 py-2 text-[#6c757d]',
   tdCenter:     'border-b border-[#dee2e6] px-3 py-2 text-center text-[#6c757d]',
   tdMono:       'border-b border-[#dee2e6] px-3 py-2 font-mono text-[0.8rem]',
-  badge: (ok: boolean, label?: string) =>
+  badge: (ok: boolean, _label?: string) =>
     [`inline-block px-2 py-[2px] rounded text-xs font-bold text-white`, ok ? 'bg-[#198754]' : 'bg-[#dc3545]'].join(' '),
   chartSection: 'flex flex-col gap-8',
   chartSm:      'max-w-[400px]',

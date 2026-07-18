@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react'
 import SettingsCard from '../../../components/settings/SettingsCard'
 import { ui } from '../../../components/settings/styles'
-import type { UpdateCheckResult, UpdateSettings } from '../../../../main/services/updater.service'
-
-type Phase = 'idle' | 'checking' | 'checked' | 'downloading' | 'ready' | 'error'
+import type { UpdaterState } from '../../../../main/services/updater.service'
 
 function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
+  if (bytes <= 0) return '0 B'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
   if (!iso) return ''
   try {
     return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
@@ -19,206 +17,138 @@ function formatDate(iso: string): string {
   }
 }
 
+/**
+ * Updates are automatic: the app checks on launch and every few hours,
+ * downloads in the background, and installs on the next quit/restart. This tab
+ * shows that status and offers "check now" / "restart & update now" controls.
+ */
 export default function UpdatesTab() {
-  const [currentVersion, setCurrentVersion] = useState('')
-  const [phase, setPhase] = useState<Phase>('idle')
-  const [checkResult, setCheckResult] = useState<UpdateCheckResult | null>(null)
-  const [downloadProgress, setDownloadProgress] = useState<{ downloaded: number; total: number } | null>(null)
-  const [errorMessage, setErrorMessage] = useState('')
-  const [settings, setSettings] = useState<UpdateSettings>({ repoOwner: 'adamsieht', repoName: 'preppy-v2', token: '' })
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle')
+  const [state, setState] = useState<UpdaterState | null>(null)
+  const [platform, setPlatform] = useState('')
+  const [resetMsg, setResetMsg] = useState('')
 
   useEffect(() => {
-    window.electronAPI.getAppVersion().then(setCurrentVersion)
-    window.electronAPI.getUpdateSettings().then(setSettings)
-
-    const unsub = window.electronAPI.onUpdateProgress((data) => {
-      setDownloadProgress(data)
-    })
-    return unsub
+    setPlatform(window.electronAPI.getPlatform())
+    window.electronAPI.getUpdateState().then(setState)
+    return window.electronAPI.onUpdateState(setState)
   }, [])
 
   async function handleCheck() {
-    setPhase('checking')
-    setCheckResult(null)
-    setErrorMessage('')
-    const res = await window.electronAPI.checkForUpdate()
-    if (res.success && res.result) {
-      setCheckResult(res.result)
-      setPhase('checked')
-    } else {
-      setErrorMessage(res.error ?? 'Unknown error')
-      setPhase('error')
-    }
+    const s = await window.electronAPI.checkForUpdate()
+    setState(s)
   }
 
-  async function handleDownload() {
-    if (!checkResult?.downloadUrl) return
-    setPhase('downloading')
-    setDownloadProgress(null)
-    const res = await window.electronAPI.downloadUpdate(checkResult.downloadUrl)
-    if (res.success) {
-      setPhase('ready')
-    } else {
-      setErrorMessage(res.error ?? 'Download failed')
-      setPhase('error')
-    }
+  async function handleInstallNow() {
+    await window.electronAPI.installUpdate()
   }
 
-  async function handleInstall() {
-    await window.electronAPI.applyUpdate()
+  async function handleRerunSetup() {
+    await window.electronAPI.resetSetup()
+    setResetMsg('Reopening setup wizard…')
+    setTimeout(() => window.location.reload(), 600)
   }
 
-  async function handleSaveSettings() {
-    await window.electronAPI.saveUpdateSettings(settings)
-    setSaveStatus('saved')
-    setTimeout(() => setSaveStatus('idle'), 2000)
-  }
-
-  const pct = downloadProgress && downloadProgress.total > 0
-    ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)
-    : 0
+  const status = state?.status ?? 'idle'
+  const pct = state?.progress ? Math.round(state.progress.percent) : 0
 
   return (
     <div className="flex flex-col gap-5 max-w-2xl">
 
-      <SettingsCard title="Application Version">
+      <SettingsCard
+        title="Application Version"
+        desc="Preppy checks for updates automatically, downloads them in the background, and installs them the next time the app restarts."
+      >
         <div className="flex items-center gap-4 flex-wrap">
           <span className={ui.stat}>
-            Current version: <span className={ui.statNum}>{currentVersion ? `v${currentVersion}` : '—'}</span>
+            Current version: <span className={ui.statNum}>{state ? `v${state.currentVersion}` : '—'}</span>
           </span>
           <button
             className={ui.primaryBtn}
             onClick={handleCheck}
-            disabled={phase === 'checking'}
+            disabled={status === 'checking' || status === 'downloading'}
           >
-            {phase === 'checking' ? 'Checking…' : 'Check for Updates'}
+            {status === 'checking' ? 'Checking…' : 'Check Now'}
           </button>
         </div>
 
-        {phase === 'checked' && checkResult && !checkResult.hasUpdate && (
+        {status === 'up-to-date' && (
           <div className="text-[#3fb950] text-sm mt-1">
-            &#10003; Already up to date (v{checkResult.latestVersion})
+            &#10003; Up to date{state?.latestVersion ? ` (v${state.latestVersion})` : ''}
           </div>
         )}
 
-        {phase === 'error' && (
-          <div className="text-[#f85149] text-sm mt-1">{errorMessage}</div>
+        {status === 'error' && (
+          <div className="text-[#f85149] text-sm mt-1">{state?.error}</div>
+        )}
+
+        {state && !state.supported && (
+          <div className={ui.note}>
+            Automatic updates are unavailable in this build (development mode or unsupported platform).
+          </div>
         )}
       </SettingsCard>
 
-      {checkResult && (
-        <SettingsCard title={phase === 'ready' ? 'Ready to Install' : checkResult.hasUpdate ? 'Update Available' : 'Latest Release'}>
+      {(status === 'available' || status === 'downloading' || status === 'downloaded') && state && (
+        <SettingsCard title={status === 'downloaded' ? 'Update Ready' : 'Update Available'}>
           <div className="flex flex-col gap-2">
             <div className="flex gap-4 flex-wrap">
               <span className={ui.stat}>
-                Latest: <span className={ui.statNum}>v{checkResult.latestVersion}</span>
+                New version: <span className={ui.statNum}>v{state.latestVersion}</span>
               </span>
-              {checkResult.publishedAt && (
-                <span className={ui.stat}>Released: {formatDate(checkResult.publishedAt)}</span>
-              )}
-              {checkResult.fileSize > 0 && (
-                <span className={ui.stat}>Size: {formatBytes(checkResult.fileSize)}</span>
+              {state.releaseDate && (
+                <span className={ui.stat}>Released: {formatDate(state.releaseDate)}</span>
               )}
             </div>
 
-            {checkResult.releaseNotes && (
-              <div
-                className="max-h-48 overflow-y-auto scrollbar-dark bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#adbac7] whitespace-pre-wrap font-mono"
-              >
-                {checkResult.releaseNotes}
+            {state.releaseNotes && (
+              <div className="max-h-48 overflow-y-auto scrollbar-dark bg-[#0d1117] border border-[#30363d] rounded-lg p-3 text-xs text-[#adbac7] whitespace-pre-wrap font-mono">
+                {state.releaseNotes}
               </div>
             )}
 
-            {checkResult.hasUpdate && phase !== 'ready' && phase !== 'downloading' && (
-              <div className={ui.actionRow}>
-                <button className={ui.primaryBtn} onClick={handleDownload}>
-                  Download Update
-                </button>
-              </div>
-            )}
-
-            {phase === 'downloading' && (
+            {status !== 'downloaded' && (
               <div className="flex flex-col gap-1">
                 <div className="text-[#adbac7] text-sm">
-                  Downloading… {downloadProgress ? `${formatBytes(downloadProgress.downloaded)} / ${formatBytes(downloadProgress.total)} (${pct}%)` : ''}
+                  Downloading automatically…{' '}
+                  {state.progress
+                    ? `${formatBytes(state.progress.transferredBytes)} / ${formatBytes(state.progress.totalBytes)} (${pct}%)`
+                    : ''}
                 </div>
                 <div className="bg-[#21262d] rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-[#28a745] h-2 rounded-full transition-all"
-                    style={{ width: `${pct}%` }}
-                  />
+                  <div className="bg-[#28a745] h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
                 </div>
               </div>
             )}
 
-            {phase === 'ready' && (
-              <div className={ui.actionRow}>
-                <span className="text-[#3fb950] text-sm font-semibold">&#10003; Downloaded</span>
-                <button className={ui.blueBtn} onClick={handleInstall}>
-                  Install &amp; Restart
-                </button>
+            {status === 'downloaded' && (
+              <div className="flex flex-col gap-2">
+                <div className="text-[#3fb950] text-sm font-semibold">
+                  &#10003; Downloaded — installs automatically the next time Preppy restarts
+                </div>
+                <div className={ui.actionRow}>
+                  <button className={ui.blueBtn} onClick={handleInstallNow}>
+                    Restart &amp; Update Now
+                  </button>
+                </div>
               </div>
-            )}
-
-            {!checkResult.hasUpdate && phase !== 'ready' && (
-              <div className="text-[#6e7681] text-sm">Already on latest version</div>
             )}
           </div>
         </SettingsCard>
       )}
 
-      <SettingsCard
-        title="Update Source"
-        right={
-          <button
-            className={ui.secondaryBtn}
-            onClick={() => setSettingsExpanded(v => !v)}
-          >
-            {settingsExpanded ? 'Collapse' : 'Configure'}
-          </button>
-        }
-      >
-        {settingsExpanded && (
-          <div className="flex flex-col gap-3 mt-1">
-            <div>
-              <div className={ui.fieldLabel}>Repo Owner</div>
-              <input
-                className={ui.input}
-                value={settings.repoOwner}
-                onChange={e => setSettings(s => ({ ...s, repoOwner: e.target.value }))}
-              />
-            </div>
-            <div>
-              <div className={ui.fieldLabel}>Repo Name</div>
-              <input
-                className={ui.input}
-                value={settings.repoName}
-                onChange={e => setSettings(s => ({ ...s, repoName: e.target.value }))}
-              />
-            </div>
-            <div>
-              <div className={ui.fieldLabel}>GitHub Token</div>
-              <input
-                type="password"
-                className={ui.input}
-                value={settings.token}
-                placeholder="Optional — required for private repos"
-                onChange={e => setSettings(s => ({ ...s, token: e.target.value }))}
-              />
-            </div>
-            <div className={ui.actionRow}>
-              <button className={ui.primaryBtn} onClick={handleSaveSettings}>
-                {saveStatus === 'saved' ? 'Saved!' : 'Save'}
-              </button>
-            </div>
-            <div className={ui.note}>
-              Requires a GitHub token with <code className={ui.mono}>repo</code> scope to check private repositories.
-            </div>
+      {platform === 'win32' && (
+        <SettingsCard
+          title="Tablet Setup"
+          desc="Re-run the first-time setup wizard to change kiosk settings: Windows Update policy, auto-login, launch at startup, and power/lock-screen hardening."
+        >
+          <div className={ui.actionRow}>
+            <button className={ui.secondaryBtn} onClick={handleRerunSetup}>
+              Re-run Setup Wizard
+            </button>
+            {resetMsg && <span className="text-[#3fb950] text-sm">{resetMsg}</span>}
           </div>
-        )}
-      </SettingsCard>
+        </SettingsCard>
+      )}
 
     </div>
   )

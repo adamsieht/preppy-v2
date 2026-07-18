@@ -37,9 +37,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Preppy-Windows
-          # Only the portable artifact — not win-unpacked/ helpers like elevate.exe
+          # The NSIS installer plus the electron-updater metadata files.
+          # (Not win-unpacked/ helpers like elevate.exe.)
           path: |
-            release/Preppy-portable.exe
+            release/Preppy-Setup-*.exe
+            release/Preppy-Setup-*.exe.blockmap
+            release/latest.yml
           retention-days: 30
 
       - name: Read package version
@@ -52,10 +55,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', steps.pkg.outputs.version) }}
-          # Publish ONLY the portable exe. A recursive glob would also attach
-          # win-unpacked/ helpers (elevate.exe, the raw Preppy.exe), and the
-          # updater could then download the wrong file.
-          files: release/Preppy-portable.exe
+          # Publish the installer, its blockmap (differential updates), and
+          # latest.yml — electron-updater reads latest.yml from the newest
+          # release to discover updates. Don't use a recursive glob: it would
+          # also attach win-unpacked/ helpers (elevate.exe, the raw Preppy.exe).
+          files: |
+            release/Preppy-Setup-*.exe
+            release/Preppy-Setup-*.exe.blockmap
+            release/latest.yml
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

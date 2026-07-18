@@ -46,13 +46,18 @@ jobs:
           name: Preppy-Linux-${{ matrix.arch }}
           path: |
             release/**/*.AppImage
+            release/latest-linux*.yml
           retention-days: 30
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/**/*.AppImage
+          # latest-linux.yml (x64) / latest-linux-arm64.yml are the
+          # electron-updater metadata for AppImage self-updates.
+          files: |
+            release/**/*.AppImage
+            release/latest-linux*.yml
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

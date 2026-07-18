@@ -1,6 +1,7 @@
-import React, { Suspense, useEffect } from 'react'
+import React, { Suspense, useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ErrorBoundary from './components/ErrorBoundary'
+import SetupWizard from './components/SetupWizard'
 import { ACCENT_KEY, applyDowAccent } from './pages/Preppy/constants'
 
 const Preppy        = React.lazy(() => import('./pages/Preppy'))
@@ -10,6 +11,16 @@ const Debug         = React.lazy(() => import('./pages/Debug'))
 const Settings      = React.lazy(() => import('./pages/Settings'))
 
 export default function App() {
+  // First-run setup wizard gate — only ever true on packaged Windows builds
+  // that haven't completed (or skipped) setup yet.
+  const [needsSetup, setNeedsSetup] = useState(false)
+
+  useEffect(() => {
+    window.electronAPI.getSetupState()
+      .then(s => setNeedsSetup(s.needsSetup))
+      .catch(() => setNeedsSetup(false))
+  }, [])
+
   // Keep DOW accent colour in sync with the clock — checks every minute so the
   // colour switches within 60 s of midnight without requiring an app restart.
   useEffect(() => {
@@ -18,6 +29,10 @@ export default function App() {
     }, 60_000)
     return () => clearInterval(iv)
   }, [])
+
+  if (needsSetup) {
+    return <SetupWizard onFinish={() => setNeedsSetup(false)} />
+  }
 
   return (
     <ErrorBoundary>

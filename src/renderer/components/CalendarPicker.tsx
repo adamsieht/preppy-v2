@@ -8,7 +8,7 @@ interface CalendarPickerProps {
   onPrint:  (hrs: number, qty: number) => Promise<void>
 }
 
-export default function CalendarPicker({ template, onPrint }: CalendarPickerProps) {
+export default function CalendarPicker({ onPrint }: CalendarPickerProps) {
   const today      = dayjs().startOf('day')
   const [viewMonth, setViewMonth] = useState(() => dayjs().startOf('month'))
 

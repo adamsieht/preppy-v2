@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import type { LabelLayout, LabelValues } from '../../Preppy/labelTypes'
 import { BUILTIN_LAYOUTS, DEFAULT_LAYOUT_ID, getLabelSize } from '../../Preppy/labelDefs'
-import { generateZpl } from '../../Preppy/labelZpl'
+import { generateZpl, loadTimeBarEnabled, saveTimeBarEnabled } from '../../Preppy/labelZpl'
 import { LABEL_LAYOUTS_KEY, LABEL_ACTIVE_KEY, STATIC_PRESETS_ENABLED_KEY, LABEL_PREVIEW_STYLE_KEY } from '../../Preppy/constants'
 import type { LabelPreviewStyle } from '../../Preppy/constants'
 import LabelPreview, { PX_PER_DOT } from '../../../components/LabelPreview'
@@ -65,6 +65,13 @@ export default function LabelsTab() {
   const [customStatics, setCustomStatics] = useState<StaticPreset[]>(loadCustomStaticPresets)
   const [staticName, setStaticName]       = useState('')
   const [staticText, setStaticText]       = useState('')
+
+  // Timeline bar (global toggle)
+  const [timeBar, setTimeBar] = useState<boolean>(loadTimeBarEnabled)
+  function toggleTimeBar(v: boolean) {
+    setTimeBar(v)
+    saveTimeBarEnabled(v)
+  }
 
   // Date calculation settings
   const [dateCalc, setDateCalc] = useState<LabelDateCalcSettings>(loadDateCalcSettings)
@@ -196,6 +203,16 @@ export default function LabelsTab() {
               <div className="text-[11px] text-[#768390]">
                 Display ZPL uses the pre-tuned rendering that looks cleaner on screen. Printing always uses the actual layout.
               </div>
+            </div>
+
+            {/* Timeline bar toggle (Daymark layouts only) */}
+            <div className="mt-3">
+              <Toggle
+                label="Timeline bar"
+                description="On Daymark labels, draw a bar under the day-of-week strip from the day it's printed to the day it expires. Hidden for same-day labels."
+                checked={timeBar}
+                onChange={toggleTimeBar}
+              />
             </div>
           </div>
 
